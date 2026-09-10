@@ -404,6 +404,10 @@ function updatePrintPeriod() {
 
   document.getElementById('printPeriod').innerText =
     `Período: ${formatShortDate(dates[0])} a ${formatShortDate(dates[dates.length - 1])}`;
+  const summary = document.getElementById('periodSummary');
+  if (summary) {
+    summary.innerText = `${formatShortDate(dates[0])} a ${formatShortDate(dates[dates.length - 1])}`;
+  }
   const now = new Date();
   document.getElementById('printDate').innerText =
     now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
