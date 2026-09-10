@@ -16,3 +16,11 @@ npm-debug.log*
 node_modules/
 dist/
 build/
+
+# Variaveis de ambiente (segredos)
+.env
+.env.*
+!.env.example
+
+# Obs: firebase-config.js e versionado de proposito (config publica do Firebase,
+# usada pelo app estatico). Seguranca e garantida pelas rules do Firestore/Auth.
