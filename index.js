@@ -75,14 +75,18 @@ const DEFAULT_STORES = [
   'CENTRO LAURO', 'SH SEC', 'PARK SHOPPING'
 ];
 
-// Lista oficial de lojas cadastradas (33 itens confirmados pelo usuário).
-const CANONICAL_STORES = [
-  'sh bela vista', 'cabula', 'caj rotula', 'castelo branco', 'centro lauro', 'centro mata',
-  'costa azu', 'eud sh bahia', 'eud ssa', 'ferr costa barris', 'ferr costa paralela', 'g outlet',
-  'liberdade', 'madison', 'mix stela', 'paripe', 'park shop', 'periperi', 'portao', 'qdb',
-  'quiosq lapa', 'ribeira', 'sh barra', 'sh lapa', 'sh piedade', 'sh brotas', 'sh ssa 1',
-  'sh ssa 2', 'sh itaigara', 'sh sec', 'sh norte', 'sao caetano', 'sh da bahia'
-];
+// Lojas oficiais = união das lojas dos hubs (base de gerentes do seed / Firestore).
+function getHubBaseStores() {
+  const seedManagers = (typeof window !== 'undefined' && window.MANAGERS_SEED && Array.isArray(window.MANAGERS_SEED.managers))
+    ? window.MANAGERS_SEED.managers
+    : [];
+  const hubs = seedManagers.length ? seedManagers : managersCache;
+  const stores = new Set();
+  hubs.forEach(hub => {
+    (Array.isArray(hub.stores) ? hub.stores : []).forEach(store => stores.add(store));
+  });
+  return stores.size ? Array.from(stores) : DEFAULT_STORES;
+}
 
 // ============================================================
 // ESTADO DO FIREBASE
@@ -238,12 +242,12 @@ async function ensureStoresDoc() {
     const doc = await ref.get();
     const current = doc.exists && Array.isArray(doc.data().stores) ? doc.data().stores : [];
     const currentNorm = current.map(normalizeText);
-    const wantedNorm = CANONICAL_STORES.map(normalizeText);
+    const wantedNorm = getHubBaseStores().map(normalizeText);
     const needsRepair =
       currentNorm.length !== wantedNorm.length ||
       currentNorm.some((name, i) => name !== wantedNorm[i]);
     if (needsRepair) {
-      storesCache = CANONICAL_STORES;
+      storesCache = getHubBaseStores();
       await ref.set({ stores: storesCache }, { merge: true });
       populateAssignmentSelects();
       populateLocationDropdown();
