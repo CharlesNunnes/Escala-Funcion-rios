@@ -827,6 +827,7 @@ function renderTable() {
 
   tbody.innerHTML = '';
   let visibleCount = 0;
+  const periodDates = getPeriodDates();
 
   employeesData.forEach((emp) => {
     // Filtro de busca
@@ -856,8 +857,8 @@ function renderTable() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map(key => `<td class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
-        <td class="py-2.5 px-3 text-center border-l border-slate-200 no-print">
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${DAY_NAMES[i % 6]} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
+        <td class="py-2.5 px-3 text-center border-l border-slate-200 no-print actions-cell">
           <div class="flex items-center justify-center gap-1">
             <button onclick="editEmployee('${escapeHtml(String(emp.id))}')" title="Editar Escala" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
               <i class="fa-solid fa-pen-to-square"></i>

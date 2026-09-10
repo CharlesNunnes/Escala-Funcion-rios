@@ -337,3 +337,101 @@ body {
   opacity: 0.6;
   pointer-events: none;
 }
+
+/* ============================================================
+   MOBILE - Escala em forma de cartões (visão clara, sem corte)
+   ============================================================ */
+@media (max-width: 767px) {
+  #tableView .overflow-x-auto {
+    overflow-x: hidden;
+  }
+
+  #escalaTable,
+  #escalaTable tbody,
+  #escalaTable tr,
+  #escalaTable td {
+    display: block;
+    width: 100% !important;
+  }
+
+  #escalaTable thead {
+    display: none;
+  }
+
+  #escalaTable tbody tr {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  #escalaTable tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0 !important;
+    border: none !important;
+    background: transparent !important;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  /* Nome do funcionário como cabeçalho do card */
+  #escalaTable tbody td:first-child {
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.5rem !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    justify-content: flex-start;
+  }
+
+  #escalaTable tbody td:first-child .employee-name {
+    white-space: normal;
+    text-align: left;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+  }
+
+  /* Cada dia vira uma linha com rótulo e nome completo */
+  #escalaTable tbody td[data-day-index]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    min-width: 4.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  #escalaTable tbody td[data-day-index] > .inline-block {
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.8rem;
+    line-height: 1.25;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Ações viram rodapé do card */
+  #escalaTable tbody td.actions-cell {
+    justify-content: flex-end;
+    border-top: 1px dashed #e2e8f0 !important;
+    padding-top: 0.5rem !important;
+    margin-top: 0.25rem;
+  }
+
+  .assignment-select {
+    font-size: 0.8rem;
+    min-height: 2.4rem;
+  }
+}

@@ -106,6 +106,8 @@ async function loadPublicSchedule() {
 
     tbody.innerHTML = '';
 
+    const periodDates = getPeriodDates();
+
     employees.forEach(emp => {
       const tr = document.createElement('tr');
       tr.className = 'border-b border-slate-200/60';
@@ -116,7 +118,7 @@ async function loadPublicSchedule() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map(key => `<td class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${DAY_NAMES[i % 6]} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
       `;
       tbody.appendChild(tr);
     });
