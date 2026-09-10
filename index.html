@@ -101,6 +101,7 @@
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
             <input id="searchInput" oninput="applyFilters()" type="search" placeholder="Buscar funcionário ou loja..." class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
+          <button type="button" onclick="clearSelectedEmployees()" class="bg-red-600 hover:bg-red-700 text-white rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-50" title="Limpar a escala dos funcionários selecionados"><i class="fa-solid fa-eraser mr-1"></i>Limpar selecionados</button>
           <button type="button" onclick="openStoreManager()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-store mr-1"></i>Gerenciar lojas</button>
         </div>
         <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -124,6 +125,7 @@
       <div class="overflow-x-auto">
         <table id="escalaTable" class="w-full text-left border-collapse">
           <thead><tr id="tableHeaderRow" class="bg-slate-800 text-white text-xs uppercase tracking-wide">
+            <th class="py-3 px-3 text-center no-print"><i class="fa-solid fa-check-double"></i></th>
             <th class="py-3 px-4 sticky left-0 bg-slate-800 min-w-44">Funcionário</th>
             <th class="py-3 px-3 text-center no-print">Ações</th>
           </tr></thead>
