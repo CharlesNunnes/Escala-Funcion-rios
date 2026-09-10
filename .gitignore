@@ -1,0 +1,18 @@
+# Sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editores
+*.swp
+*~
+.vscode/.history/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Outros
+node_modules/
+dist/
+build/
