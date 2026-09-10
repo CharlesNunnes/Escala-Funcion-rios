@@ -186,7 +186,7 @@
         <input id="newStoreInput" type="text" placeholder="Nome da nova loja" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
         <button type="button" onclick="addStoreFromInput()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>Adicionar</button>
       </div>
-      <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>Excluir uma loja não remove as escalas já atribuídas a ela, apenas a tira da lista padrão.</p>
+      <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>Excluir uma loja a remove da lista padrão. Se ainda houver escalas atribuídas a ela, ela continuará aparecendo.</p>
       <ul id="storeList" class="mt-4 divide-y divide-slate-200"></ul>
       <div id="storesEmptyMsg" class="hidden mt-4 text-center text-slate-500 text-sm py-6">Nenhuma loja cadastrada.</div>
       <div class="flex justify-end border-t mt-6 pt-5"><button type="button" onclick="closeStoreModal()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold">Fechar</button></div>

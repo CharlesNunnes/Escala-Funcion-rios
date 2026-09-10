@@ -115,8 +115,34 @@ function getPeriodDates() {
   });
 }
 
+function getStoreListFromAssignments() {
+  const stores = new Set();
+  employeesData.forEach(emp => {
+    ASSIGNMENT_KEYS.forEach(key => {
+      const value = String(emp[key] || '').trim();
+      if (value && !isSpecialAssignment(value)) stores.add(value.toUpperCase());
+    });
+  });
+  return Array.from(stores);
+}
+
+function mergeStoreLists(...lists) {
+  const seen = new Set();
+  const result = [];
+  lists.forEach(list => {
+    (list || []).forEach(item => {
+      const key = normalizeText(item);
+      if (item && !seen.has(key)) {
+        seen.add(key);
+        result.push(item);
+      }
+    });
+  });
+  return result;
+}
+
 function getStoreList() {
-  return [...storesCache];
+  return mergeStoreLists(storesCache, getStoreListFromAssignments());
 }
 
 async function saveStoreList(stores) {
@@ -138,6 +164,31 @@ async function saveStoreList(stores) {
 function isSpecialAssignment(value) {
   const normalized = normalizeText(value);
   return !value || value === '-' || ['feriado', 'ferias', 'folga', 'atestado'].includes(normalized);
+}
+
+let storesSyncPending = false;
+
+async function ensureStoresDoc() {
+  if (!isUsingFirebase() || storesSyncPending) return;
+  storesSyncPending = true;
+  try {
+    const ref = db.collection('config').doc('stores');
+    const doc = await ref.get();
+    const current = doc.exists && Array.isArray(doc.data().stores) ? doc.data().stores : [];
+    const combined = mergeStoreLists(current, getStoreListFromAssignments());
+    if (!combined.length) return;
+    if (!doc.exists || current.length !== combined.length) {
+      storesCache = combined;
+      await ref.set({ stores: combined }, { merge: true });
+      populateAssignmentSelects();
+      populateLocationDropdown();
+      updateKPIs();
+    }
+  } catch (error) {
+    console.error('Erro ao sincronizar lojas:', error);
+  } finally {
+    storesSyncPending = false;
+  }
 }
 
 function populateAssignmentSelects() {
@@ -456,6 +507,7 @@ function setupFirestoreListeners() {
         ...normalizeEmployee(doc.data())
       }));
       refreshUI();
+      ensureStoresDoc();
     }, error => {
       console.error('Erro ao escutar funcionários:', error);
     });
@@ -466,10 +518,14 @@ function setupFirestoreListeners() {
         const data = doc.data();
         if (Array.isArray(data.stores) && data.stores.length) {
           storesCache = data.stores;
-          populateAssignmentSelects();
-          populateLocationDropdown();
         }
+      } else {
+        storesCache = [];
+        ensureStoresDoc();
       }
+      populateAssignmentSelects();
+      populateLocationDropdown();
+      updateKPIs();
     }, error => {
       console.error('Erro ao escutar lojas:', error);
     });
