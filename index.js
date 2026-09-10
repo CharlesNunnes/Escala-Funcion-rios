@@ -63,10 +63,12 @@ const IS_FIREBASE_CONFIGURED = typeof firebase !== 'undefined' &&
 let isLocalMode = false;
 let employeeUnsubscribe = null;
 let storeUnsubscribe = null;
+let managerUnsubscribe = null;
 
 // ---- Estado de administradores ----
 const ADMIN_EMAILS = ['xaununnes@gmail.com'];
 let adminsCache = [];
+let managersCache = [];
 let isAdminUser = false;
 let currentAdminEmail = null;
 let adminUnsubscribe = null;
@@ -458,6 +460,7 @@ function showLogin() {
 function refreshUI() {
   updateKPIs();
   populateLocationDropdown();
+  populatePersonDropdown();
   renderTable();
   renderStoreCoverage();
 }
@@ -529,13 +532,23 @@ function setupFirestoreListeners() {
     }, error => {
       console.error('Erro ao escutar lojas:', error);
     });
+
+  managerUnsubscribe = db.collection('managers')
+    .onSnapshot(snapshot => {
+      managersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      populatePersonDropdown();
+    }, error => {
+      console.error('Erro ao escutar gerentes:', error);
+    });
 }
 
 function stopListeners() {
   if (employeeUnsubscribe) employeeUnsubscribe();
   if (storeUnsubscribe) storeUnsubscribe();
+  if (managerUnsubscribe) managerUnsubscribe();
   employeeUnsubscribe = null;
   storeUnsubscribe = null;
+  managerUnsubscribe = null;
 }
 
 async function initFirebaseSession() {
@@ -866,6 +879,24 @@ function renderTable() {
     const matchesSearch = normalizeText(emp.name).includes(searchVal) ||
       getAssignments(emp).some(val => normalizeText(val).includes(searchVal));
 
+    // Filtro por pessoa (funcionário ou gerente)
+    const personFilter = document.getElementById('filterPerson').value;
+    let matchesPerson = true;
+    if (personFilter) {
+      if (personFilter.startsWith('emp:')) {
+        matchesPerson = personFilter === 'emp:' + String(emp.id);
+      } else if (personFilter.startsWith('mgr:')) {
+        const hub = personFilter.slice(4);
+        const manager = managersCache.find(m => normalizeText(m.hub) === normalizeText(hub));
+        if (manager && Array.isArray(manager.stores)) {
+          matchesPerson = getAssignments(emp).some(val =>
+            manager.stores.some(store => normalizeText(val) === normalizeText(store)));
+        } else {
+          matchesPerson = false;
+        }
+      }
+    }
+
     // Filtro de status
     const isOnLeave = getAssignments(emp).some(val => normalizeText(val).includes('ferias'));
     let matchesStatus = true;
@@ -878,7 +909,7 @@ function renderTable() {
       matchesLocation = getAssignments(emp).some(val => normalizeText(val) === normalizeText(locationFilter));
     }
 
-    if (matchesSearch && matchesStatus && matchesLocation) {
+    if (matchesSearch && matchesStatus && matchesLocation && matchesPerson) {
       visibleCount++;
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-200/60';
@@ -949,6 +980,48 @@ function populateLocationDropdown() {
     option.textContent = store;
     select.appendChild(option);
   });
+}
+
+// Preencher dropdown de pessoas (funcionários + gerentes)
+function populatePersonDropdown() {
+  const select = document.getElementById('filterPerson');
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = '<option value="">Todas as pessoas</option>';
+
+  const byName = (a, b) => normalizeText(a).localeCompare(normalizeText(b));
+
+  if (managersCache.length) {
+    const group = document.createElement('optgroup');
+    group.label = 'Gerentes';
+    managersCache
+      .slice()
+      .sort((a, b) => byName(a.hub, b.hub))
+      .forEach(manager => {
+        const option = document.createElement('option');
+        option.value = 'mgr:' + manager.hub;
+        option.textContent = manager.hub;
+        group.appendChild(option);
+      });
+    select.appendChild(group);
+  }
+
+  if (employeesData.length) {
+    const group = document.createElement('optgroup');
+    group.label = 'Funcionários';
+    employeesData
+      .slice()
+      .sort((a, b) => byName(a.name, b.name))
+      .forEach(emp => {
+        const option = document.createElement('option');
+        option.value = 'emp:' + emp.id;
+        option.textContent = emp.name;
+        group.appendChild(option);
+      });
+    select.appendChild(group);
+  }
+
+  if (previous) select.value = previous;
 }
 
 // Renderizar resumo por loja
