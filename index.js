@@ -168,61 +168,8 @@ function isSpecialAssignment(value) {
   return !value || value === '-' || ['feriado', 'ferias', 'folga', 'atestado'].includes(normalized);
 }
 
-// Correspondência de loja entre a escala e a base de gerentes (aceita abreviações
-// como "EUD SSA" <-> "Eudora SSA" e "SH BARRA" <-> "Shop Barra", sem falsos positivos)
-function canonToken(token) {
-  const aliases = { sh: 'shop', eud: 'eudora' };
-  const clean = String(token).replace(/[^\p{L}\p{N}]+/gu, '');
-  return aliases[clean] || clean;
-}
-
-function tokenMatch(ta, tb) {
-  const a = canonToken(ta);
-  const b = canonToken(tb);
-  if (a.length < 3 || b.length < 3) return false;
-  return a === b || (a.length >= 4 && a.startsWith(b)) || (b.length >= 4 && b.startsWith(a));
-}
-
-function storeNameMatches(scaleName, managerStore) {
-  const a = normalizeText(scaleName);
-  const b = normalizeText(managerStore);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const minSub = 4;
-  const unitSuffix = /^(\d+|[ivx]+|norte|sul|leste|oeste|centro)$/;
-  if (a.length >= minSub && b.includes(a)) {
-    const rest = b.slice(a.length).trim();
-    if (!(rest && unitSuffix.test(rest))) return true;
-  }
-  if (b.length >= minSub && a.includes(b)) {
-    const rest = a.slice(b.length).trim();
-    if (!(rest && unitSuffix.test(rest))) return true;
-  }
-
-  const tokensA = a.split(/\s+/).filter(Boolean);
-  const tokensB = b.split(/\s+/).filter(Boolean);
-
-  const matchedA = new Set();
-  const matchedB = new Set();
-  tokensA.forEach(ta => tokensB.forEach(tb => {
-    if (tokenMatch(ta, tb)) {
-      matchedA.add(canonToken(ta));
-      matchedB.add(canonToken(tb));
-    }
-  }));
-
-  const fullA = matchedA.size >= tokensA.length;
-  const fullB = matchedB.size >= tokensB.length;
-  if (fullA || fullB) return true;
-
-  const unmatchedA = tokensA.filter(t => !matchedA.has(canonToken(t)) && canonToken(t).length >= 4);
-  const unmatchedB = tokensB.filter(t => !matchedB.has(canonToken(t)) && canonToken(t).length >= 4);
-  const overlapCount = matchedA.size;
-
-  if (overlapCount >= 2 && !(unmatchedA.length && unmatchedB.length)) return true;
-
-  return false;
-}
+// Correspondência de loja entre a escala e a base de gerentes
+// Implementação compartilhada em matching.js (window.Matching.storeNameMatches)
 
 let storesSyncPending = false;
 
@@ -353,6 +300,18 @@ async function renameStore(oldName, newName) {
   refreshUI();
 }
 
+async function addStore(storeName) {
+  const store = (storeName || '').trim();
+  if (!store) return;
+  const stores = getStoreList();
+  if (stores.some(existing => normalizeText(existing) === normalizeText(store))) {
+    alert('Esta loja já existe na lista.');
+    return;
+  }
+  stores.push(store);
+  await saveStoreList(stores);
+}
+
 async function addStoreFromInput() {
   const input = document.getElementById('newStoreInput');
   const store = (input.value || '').trim();
@@ -383,7 +342,10 @@ function updatePrintPeriod() {
 
   document.getElementById('printPeriod').innerText =
     `Período: ${formatShortDate(dates[0])} a ${formatShortDate(dates[dates.length - 1])}`;
-  document.querySelectorAll('[data-day-index]').forEach(element => {
+  const now = new Date();
+  document.getElementById('printDate').innerText =
+    now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  document.querySelectorAll('#escalaTable th[data-day-index]').forEach(element => {
     const index = Number(element.dataset.dayIndex);
     const date = dates[index];
     element.innerHTML = `<span class="day-name">${DAY_NAMES[index % 6]}</span><span class="day-date">${formatShortDate(date)}</span>`;
@@ -500,7 +462,7 @@ function loadStoresFromLocalStorage() {
 function showApp() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
-  if (auth && auth.currentUser) {
+  if (typeof auth !== 'undefined' && auth.currentUser) {
     document.getElementById('userDisplay').innerText = auth.currentUser.displayName || auth.currentUser.email || '';
   }
 }
@@ -1027,7 +989,7 @@ function renderTable() {
       } else if (personFilter.startsWith('mgr:')) {
         if (selectedManager && Array.isArray(selectedManager.stores)) {
           matchesPerson = getAssignments(emp).some(val =>
-            selectedManager.stores.some(store => storeNameMatches(val, store)));
+            selectedManager.stores.some(store => Matching.storeNameMatches(val, store)));
         } else {
           matchesPerson = false;
         }
@@ -1191,7 +1153,7 @@ function renderStoreCoverage() {
 
   const sortedStores = Object.keys(storeMap)
     .filter(store => !selectedManager || (Array.isArray(selectedManager.stores) &&
-      selectedManager.stores.some(mStore => storeNameMatches(store, mStore))))
+      selectedManager.stores.some(mStore => Matching.storeNameMatches(store, mStore))))
     .sort();
 
   if (sortedStores.length === 0) {
@@ -1318,6 +1280,7 @@ async function deleteEmployee(id) {
 // Filtros e Alternância de Abas
 function applyFilters() {
   renderTable();
+  renderStoreCoverage();
 }
 
 function switchTab(tab) {
@@ -1339,6 +1302,9 @@ function switchTab(tab) {
   if (adminBtn) {
     adminBtn.className = isAdmin ? baseOn : baseOff;
     if (!isAdminUser) adminBtn.classList.add('hidden');
+  }
+  if (isStores) {
+    renderStoreCoverage();
   }
   if (isAdmin) {
     renderAdminList();
@@ -1367,6 +1333,8 @@ function exportCSV() {
 
 // Inicialização ao carregar página
 window.addEventListener('DOMContentLoaded', setupAuth);
+
+window.addEventListener('beforeprint', updatePrintPeriod);
 
 // Delegação de eventos para remover administradores
 document.getElementById('adminList').addEventListener('click', (event) => {

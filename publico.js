@@ -24,54 +24,6 @@ function getAssignments(emp) {
   return ASSIGNMENT_KEYS.map(key => String(emp[key] || '-')).filter(val => val && val !== '-');
 }
 
-function canonToken(token) {
-  const aliases = { sh: 'shop', eud: 'eudora' };
-  const clean = String(token).replace(/[^\p{L}\p{N}]+/gu, '');
-  return aliases[clean] || clean;
-}
-
-function tokenMatch(ta, tb) {
-  const a = canonToken(ta);
-  const b = canonToken(tb);
-  if (a.length < 3 || b.length < 3) return false;
-  return a === b || (a.length >= 4 && a.startsWith(b)) || (b.length >= 4 && b.startsWith(a));
-}
-
-function storeNameMatches(scaleName, managerStore) {
-  const a = normalizeText(scaleName);
-  const b = normalizeText(managerStore);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const minSub = 4;
-  const unitSuffix = /^(\d+|[ivx]+|norte|sul|leste|oeste|centro)$/;
-  if (a.length >= minSub && b.includes(a)) {
-    const rest = b.slice(a.length).trim();
-    if (!(rest && unitSuffix.test(rest))) return true;
-  }
-  if (b.length >= minSub && a.includes(b)) {
-    const rest = a.slice(b.length).trim();
-    if (!(rest && unitSuffix.test(rest))) return true;
-  }
-  const tokensA = a.split(/\s+/).filter(Boolean);
-  const tokensB = b.split(/\s+/).filter(Boolean);
-  const matchedA = new Set();
-  const matchedB = new Set();
-  tokensA.forEach(ta => tokensB.forEach(tb => {
-    if (tokenMatch(ta, tb)) {
-      matchedA.add(canonToken(ta));
-      matchedB.add(canonToken(tb));
-    }
-  }));
-  const fullA = matchedA.size >= tokensA.length;
-  const fullB = matchedB.size >= tokensB.length;
-  if (fullA || fullB) return true;
-  const unmatchedA = tokensA.filter(t => !matchedA.has(canonToken(t)) && canonToken(t).length >= 4);
-  const unmatchedB = tokensB.filter(t => !matchedB.has(canonToken(t)) && canonToken(t).length >= 4);
-  const overlapCount = matchedA.size;
-  if (overlapCount >= 2 && !(unmatchedA.length && unmatchedB.length)) return true;
-  return false;
-}
-
 function getPeriodDates() {
   const today = new Date();
   const monday = new Date(today);
@@ -222,10 +174,7 @@ async function loadPublicSchedule() {
   const tbody = document.getElementById('publicTableBody');
 
   try {
-    const [empSnapshot, storesSnapshot] = await Promise.all([
-      db.collection('employees').get(),
-      db.collection('config').doc('stores').get()
-    ]);
+    const empSnapshot = await db.collection('employees').get();
 
     publicEmployees = empSnapshot.docs.map(doc => {
       const data = doc.data() || {};
@@ -242,7 +191,7 @@ async function loadPublicSchedule() {
         return false;
       }
       if (selectedManager && Array.isArray(selectedManager.stores)) {
-        if (!getAssignments(emp).some(val => selectedManager.stores.some(store => storeNameMatches(val, store)))) {
+        if (!getAssignments(emp).some(val => selectedManager.stores.some(store => Matching.storeNameMatches(val, store)))) {
           return false;
         }
       }
@@ -292,4 +241,5 @@ document.addEventListener('DOMContentLoaded', () => {
   updatePeriodHeader();
   loadPublicSchedule();
   setupManagersListener();
+  window.addEventListener('beforeprint', updatePeriodHeader);
 });

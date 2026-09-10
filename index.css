@@ -212,6 +212,16 @@ body {
   backdrop-filter: blur(1px);
 }
 
+#escalaTable th:first-child {
+  background-color: #fff;
+}
+
+/* Coluna fixa de nomes com fundo sólido ao rolar */
+#escalaTable tbody td:first-child {
+  background-color: #f8fafc;
+  backdrop-filter: none;
+}
+
 /* Regras de Impressão de alta qualidade */
 @media print {
   @page {
