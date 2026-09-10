@@ -7,7 +7,7 @@ window.MANAGERS_SEED = {
     { hub: "Hub Tamires", stores: ["Shop Barra", "Brotas", "Ferreira Costa"] },
     { hub: "Hub Sara", stores: ["Shop Lapa", "Shop Piedade", "Metrô Lapa"] },
     { hub: "Hub Hector", stores: ["Shop Bela Vista", "Shop Itaigara"] },
-    { hub: "Hub Gutemberg", stores: ["Shop Paralela", "CAJ RÓTULA"] },
+    { hub: "Hub Gutemberg", stores: ["Shop Paralela", "Caj Rotula"] },
     { hub: "Hub Junio", stores: ["Shop Parque", "Centro Lauro", "Sec"] },
     { hub: "Hub Uiliam", stores: ["Liberdade", "São Caetano", "Paripe"] },
     { hub: "Hub Daisy", stores: ["Eudora SSA", "QDB"] },
