@@ -194,20 +194,6 @@ function initPrintUI() {
 // ============================================================
 // AUTENTICAÇÃO
 // ============================================================
-function switchAuthTab(tab) {
-  const isLogin = tab === 'login';
-  document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
-  document.getElementById('registerForm').classList.toggle('hidden', isLogin);
-  document.getElementById('loginError').classList.add('hidden');
-  document.getElementById('registerError').classList.add('hidden');
-  document.getElementById('loginTabBtn').className = isLogin
-    ? 'flex-1 px-4 py-2 rounded-md text-sm font-semibold bg-white shadow-sm text-slate-800'
-    : 'flex-1 px-4 py-2 rounded-md text-sm font-semibold text-slate-500';
-  document.getElementById('registerTabBtn').className = isLogin
-    ? 'flex-1 px-4 py-2 rounded-md text-sm font-semibold text-slate-500'
-    : 'flex-1 px-4 py-2 rounded-md text-sm font-semibold bg-white shadow-sm text-slate-800';
-}
-
 function getAuthErrorMessage(error) {
   const code = error.code || '';
   const map = {
@@ -225,8 +211,8 @@ function getAuthErrorMessage(error) {
   return map[code] || error.message || 'Erro inesperado.';
 }
 
-function setAuthLoading(loading, mode) {
-  const button = document.getElementById(mode === 'login' ? 'loginSubmitBtn' : 'registerSubmitBtn');
+function setAuthLoading(loading) {
+  const button = document.getElementById('loginSubmitBtn');
   if (loading) {
     if (!button.dataset.original) button.dataset.original = button.innerHTML;
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Aguarde...';
@@ -237,8 +223,8 @@ function setAuthLoading(loading, mode) {
   }
 }
 
-function showFormError(kind, message) {
-  const element = document.getElementById(kind === 'login' ? 'loginError' : 'registerError');
+function showFormError(message) {
+  const element = document.getElementById('loginError');
   element.textContent = message;
   element.classList.remove('hidden');
   element.classList.remove('auth-error');
@@ -249,38 +235,18 @@ function showFormError(kind, message) {
 async function handleLogin(event) {
   event.preventDefault();
   if (!IS_FIREBASE_CONFIGURED) {
-    showFormError('login', 'Firebase não configurado. Use o modo local.');
+    showFormError('Firebase não configurado. Use o modo local.');
     return;
   }
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
-  setAuthLoading(true, 'login');
+  setAuthLoading(true);
   try {
     await auth.signInWithEmailAndPassword(email, password);
   } catch (err) {
-    showFormError('login', getAuthErrorMessage(err));
+    showFormError(getAuthErrorMessage(err));
   } finally {
-    setAuthLoading(false, 'login');
-  }
-}
-
-async function handleRegister(event) {
-  event.preventDefault();
-  if (!IS_FIREBASE_CONFIGURED) {
-    showFormError('register', 'Firebase não configurado. Use o modo local.');
-    return;
-  }
-  const name = document.getElementById('registerName').value.trim();
-  const email = document.getElementById('registerEmail').value.trim();
-  const password = document.getElementById('registerPassword').value;
-  setAuthLoading(true, 'register');
-  try {
-    const credential = await auth.createUserWithEmailAndPassword(email, password);
-    await credential.user.updateProfile({ displayName: name });
-  } catch (err) {
-    showFormError('register', getAuthErrorMessage(err));
-  } finally {
-    setAuthLoading(false, 'register');
+    setAuthLoading(false);
   }
 }
 
@@ -429,7 +395,6 @@ function setupAuth() {
     storesCache = [...DEFAULT_STORES];
     document.getElementById('firebaseWarning').classList.remove('hidden');
     document.getElementById('localModeBtn').classList.remove('hidden');
-    switchAuthTab('login');
     return;
   }
   auth.onAuthStateChanged(user => {
