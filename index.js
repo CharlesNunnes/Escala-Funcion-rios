@@ -1145,9 +1145,8 @@ function updateKPIs() {
   ).length;
   document.getElementById('statOnLeave').innerText = onLeaveCount;
 
-  // Unidades cadastradas (lista persistida + seed; independe das datas visíveis)
-  const stores = getStoreList();
-  document.getElementById('statTotalStores').innerText = stores.length;
+  // Unidades cadastradas (lista persistida em config/stores)
+  document.getElementById('statTotalStores').innerText = storesCache.length;
 }
 
 // Preencher dropdown de unidades
@@ -1155,7 +1154,7 @@ function populateLocationDropdown() {
   const select = document.getElementById('filterLocation');
   select.innerHTML = '<option value="ALL">Todas as Unidades</option>';
 
-  const stores = getStoreList().map(store => store.trim().toUpperCase()).sort();
+  const stores = storesCache.map(store => store.trim().toUpperCase()).sort();
 
   Array.from(stores).forEach(store => {
     const option = document.createElement('option');
