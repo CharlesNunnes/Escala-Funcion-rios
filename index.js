@@ -75,6 +75,15 @@ const DEFAULT_STORES = [
   'CENTRO LAURO', 'SH SEC', 'PARK SHOPPING'
 ];
 
+// Lista oficial de lojas cadastradas (33 itens confirmados pelo usuário).
+const CANONICAL_STORES = [
+  'sh bela vista', 'cabula', 'caj rotula', 'castelo branco', 'centro lauro', 'centro mata',
+  'costa azu', 'eud sh bahia', 'eud ssa', 'ferr costa barris', 'ferr costa paralela', 'g outlet',
+  'liberdade', 'madison', 'mix stela', 'paripe', 'park shop', 'periperi', 'portao', 'qdb',
+  'quiosq lapa', 'ribeira', 'sh barra', 'sh lapa', 'sh piedade', 'sh brotas', 'sh ssa 1',
+  'sh ssa 2', 'sh itaigara', 'sh sec', 'sh norte', 'sao caetano', 'sh da bahia'
+];
+
 // ============================================================
 // ESTADO DO FIREBASE
 // ============================================================
@@ -193,6 +202,7 @@ function getStoreList() {
 }
 
 async function saveStoreList(stores) {
+  storesManuallyManaged = true;
   storesCache = [...stores];
   if (isUsingFirebase()) {
     try {
@@ -217,23 +227,31 @@ function isSpecialAssignment(value) {
 // Implementação compartilhada em matching.js (window.Matching.storeNameMatches)
 
 let storesSyncPending = false;
+let storesManuallyManaged = false;
 
 async function ensureStoresDoc() {
   if (!isUsingFirebase() || storesSyncPending) return;
   storesSyncPending = true;
   try {
+    if (storesManuallyManaged) return;
     const ref = db.collection('config').doc('stores');
     const doc = await ref.get();
     const current = doc.exists && Array.isArray(doc.data().stores) ? doc.data().stores : [];
-    const combined = mergeStoreLists(current, getStoreListFromAssignments());
-    if (!combined.length) return;
-    if (!doc.exists || current.length !== combined.length) {
-      storesCache = combined;
-      await ref.set({ stores: combined }, { merge: true });
+    const currentNorm = current.map(normalizeText);
+    const wantedNorm = CANONICAL_STORES.map(normalizeText);
+    const needsRepair =
+      currentNorm.length !== wantedNorm.length ||
+      currentNorm.some((name, i) => name !== wantedNorm[i]);
+    if (needsRepair) {
+      storesCache = CANONICAL_STORES;
+      await ref.set({ stores: storesCache }, { merge: true });
       populateAssignmentSelects();
       populateLocationDropdown();
       updateKPIs();
+    } else {
+      storesCache = current;
     }
+    storesManuallyManaged = true;
   } catch (error) {
     console.error('Erro ao sincronizar lojas:', error);
   } finally {
