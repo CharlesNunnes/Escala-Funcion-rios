@@ -583,6 +583,7 @@ function setupAdminListener() {
       isAdminUser = true;
       bootstrapSelfAdmin(currentAdminEmail);
       renderAdminList();
+      seedManagers();
       document.getElementById('tabAdminBtn').classList.remove('hidden');
     }, error => {
       // Apenas administradores podem ler a coleção admins
@@ -609,6 +610,37 @@ function bootstrapSelfAdmin(email) {
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     createdBy: 'sistema (bootstrap)'
   }).catch(err => console.error('Erro ao registrar administrador inicial:', err));
+}
+
+let managersSeeded = false;
+
+// Popula a coleção "managers" (gerentes -> lojas) no Firestore se ainda não existir
+async function seedManagers() {
+  if (managersSeeded || !isUsingFirebase() || !isAdminUser) return;
+  if (!window.MANAGERS_SEED || !Array.isArray(window.MANAGERS_SEED.managers)) return;
+  managersSeeded = true;
+  try {
+    const snapshot = await db.collection('managers').limit(1).get();
+    if (!snapshot.empty) return;
+    const batch = db.batch();
+    window.MANAGERS_SEED.managers.forEach(manager => {
+      const name = String(manager.hub || '').replace(/^Hub\s+/i, '');
+      const id = 'hub-' + normalizeText(name).replace(/\s+/g, '-');
+      batch.set(db.collection('managers').doc(id), {
+        name,
+        hub: manager.hub,
+        division: window.MANAGERS_SEED.division,
+        stores: manager.stores || [],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: 'sistema (seed)'
+      });
+    });
+    await batch.commit();
+    console.log('Coleção "managers" populada com ' + window.MANAGERS_SEED.managers.length + ' gerentes.');
+  } catch (error) {
+    managersSeeded = false;
+    console.error('Erro ao semear gerentes:', error);
+  }
 }
 
 function hideAdminUI() {
