@@ -168,18 +168,60 @@ function isSpecialAssignment(value) {
   return !value || value === '-' || ['feriado', 'ferias', 'folga', 'atestado'].includes(normalized);
 }
 
-// Correspondência de loja entre a escala e a base de gerentes (aceita abreviações)
+// Correspondência de loja entre a escala e a base de gerentes (aceita abreviações
+// como "EUD SSA" <-> "Eudora SSA" e "SH BARRA" <-> "Shop Barra", sem falsos positivos)
+function canonToken(token) {
+  const aliases = { sh: 'shop', eud: 'eudora' };
+  const clean = String(token).replace(/[^\p{L}\p{N}]+/gu, '');
+  return aliases[clean] || clean;
+}
+
+function tokenMatch(ta, tb) {
+  const a = canonToken(ta);
+  const b = canonToken(tb);
+  if (a.length < 3 || b.length < 3) return false;
+  return a === b || (a.length >= 4 && a.startsWith(b)) || (b.length >= 4 && b.startsWith(a));
+}
+
 function storeNameMatches(scaleName, managerStore) {
   const a = normalizeText(scaleName);
   const b = normalizeText(managerStore);
   if (!a || !b) return false;
   if (a === b) return true;
   const minSub = 4;
-  if (a.length >= minSub && b.includes(a)) return true;
-  if (b.length >= minSub && a.includes(b)) return true;
-  const tokensA = a.split(/\s+/);
-  const tokensB = b.split(/\s+/);
-  return tokensA.some(ta => ta.length >= 3 && tokensB.some(tb => tb.length >= 3 && (ta.startsWith(tb) || tb.startsWith(ta))));
+  const unitSuffix = /^(\d+|[ivx]+|norte|sul|leste|oeste|centro)$/;
+  if (a.length >= minSub && b.includes(a)) {
+    const rest = b.slice(a.length).trim();
+    if (!(rest && unitSuffix.test(rest))) return true;
+  }
+  if (b.length >= minSub && a.includes(b)) {
+    const rest = a.slice(b.length).trim();
+    if (!(rest && unitSuffix.test(rest))) return true;
+  }
+
+  const tokensA = a.split(/\s+/).filter(Boolean);
+  const tokensB = b.split(/\s+/).filter(Boolean);
+
+  const matchedA = new Set();
+  const matchedB = new Set();
+  tokensA.forEach(ta => tokensB.forEach(tb => {
+    if (tokenMatch(ta, tb)) {
+      matchedA.add(canonToken(ta));
+      matchedB.add(canonToken(tb));
+    }
+  }));
+
+  const fullA = matchedA.size >= tokensA.length;
+  const fullB = matchedB.size >= tokensB.length;
+  if (fullA || fullB) return true;
+
+  const unmatchedA = tokensA.filter(t => !matchedA.has(canonToken(t)) && canonToken(t).length >= 4);
+  const unmatchedB = tokensB.filter(t => !matchedB.has(canonToken(t)) && canonToken(t).length >= 4);
+  const overlapCount = matchedA.size;
+
+  if (overlapCount >= 2 && !(unmatchedA.length && unmatchedB.length)) return true;
+
+  return false;
 }
 
 let storesSyncPending = false;
