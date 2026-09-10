@@ -1145,16 +1145,9 @@ function updateKPIs() {
   ).length;
   document.getElementById('statOnLeave').innerText = onLeaveCount;
 
-  // Unidades únicas
-  const stores = new Set();
-  employeesData.forEach(emp => {
-    getAssignments(emp).forEach(val => {
-      if (val && !normalizeText(val).includes('feriado') && !normalizeText(val).includes('ferias') && val !== '-') {
-        stores.add(val.trim().toUpperCase());
-      }
-    });
-  });
-  document.getElementById('statTotalStores').innerText = stores.size;
+  // Unidades cadastradas (lista persistida + seed; independe das datas visíveis)
+  const stores = getStoreList();
+  document.getElementById('statTotalStores').innerText = stores.length;
 }
 
 // Preencher dropdown de unidades
@@ -1162,16 +1155,9 @@ function populateLocationDropdown() {
   const select = document.getElementById('filterLocation');
   select.innerHTML = '<option value="ALL">Todas as Unidades</option>';
 
-  const stores = new Set();
-  employeesData.forEach(emp => {
-    getAssignments(emp).forEach(val => {
-      if (val && !normalizeText(val).includes('feriado') && !normalizeText(val).includes('ferias') && val !== '-') {
-        stores.add(val.trim().toUpperCase());
-      }
-    });
-  });
+  const stores = getStoreList().map(store => store.trim().toUpperCase()).sort();
 
-  Array.from(stores).sort().forEach(store => {
+  Array.from(stores).forEach(store => {
     const option = document.createElement('option');
     option.value = store;
     option.textContent = store;
