@@ -100,15 +100,19 @@
     </section>
 
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6 no-print">
-      <div class="flex flex-col xl:flex-row gap-3 xl:items-center">
-        <div class="relative flex-1">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input id="searchInput" oninput="applyFilters()" type="search" placeholder="Buscar funcionário ou loja..." class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input id="searchInput" oninput="applyFilters()" type="search" placeholder="Buscar funcionário ou loja..." class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <button type="button" onclick="openStoreManager()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-store mr-1"></i>Gerenciar lojas</button>
         </div>
-        <select id="filterStatus" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="ALL">Todos os status</option><option value="FERIAS">Em férias</option><option value="ATIVOS">Em atividade</option></select>
-        <select id="filterPerson" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm" title="Filtrar por funcionário ou gerente"><option value="">Todas as pessoas</option></select>
-        <select id="filterLocation" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="ALL">Todas as lojas</option></select>
-        <button type="button" onclick="openStoreManager()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-store mr-1"></i>Gerenciar lojas</button>
+        <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <select id="filterStatus" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm sm:w-44"><option value="ALL">Todos os status</option><option value="FERIAS">Em férias</option><option value="ATIVOS">Em atividade</option></select>
+          <select id="filterPerson" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm sm:w-72" title="Filtrar por funcionário ou gerente"><option value="">Todas as pessoas</option></select>
+          <select id="filterLocation" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm sm:flex-1"><option value="ALL">Todas as lojas</option></select>
+        </div>
       </div>
       <div class="flex bg-slate-100 p-1 rounded-lg w-fit mt-4">
         <button id="tabTableBtn" onclick="switchTab('table')" class="px-4 py-2 rounded-md text-sm font-semibold bg-white shadow-sm">Escala</button>
