@@ -151,17 +151,115 @@ function populateAssignmentSelects() {
   });
 }
 
-async function addStore() {
-  const store = prompt('Digite o nome da nova loja:');
-  if (!store || !store.trim()) return;
-  const normalizedStore = store.trim().toUpperCase();
+// Gerenciamento de lojas (modal)
+function openStoreManager() {
+  renderStoreList();
+  document.getElementById('newStoreInput').value = '';
+  document.getElementById('storeModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('newStoreInput').focus(), 0);
+}
+
+function closeStoreModal() {
+  document.getElementById('storeModal').classList.add('hidden');
+}
+
+function renderStoreList() {
   const stores = getStoreList();
-  if (!stores.some(item => normalizeText(item) === normalizeText(normalizedStore))) {
-    stores.push(normalizedStore);
-    await saveStoreList(stores);
-    return alert(`Loja "${normalizedStore}" adicionada com sucesso!`);
+  const list = document.getElementById('storeList');
+  list.innerHTML = '';
+  document.getElementById('storesEmptyMsg').classList.toggle('hidden', stores.length > 0);
+  stores.sort().forEach(store => {
+    const li = document.createElement('li');
+    li.className = 'flex items-center justify-between py-2.5 gap-3';
+    li.dataset.storeName = store;
+    li.innerHTML = `
+      <span class="flex items-center gap-2 text-sm font-medium text-slate-700"><i class="fa-solid fa-store text-emerald-600"></i>${escapeHtml(store)}</span>
+      <div class="flex items-center gap-1">
+        <button type="button" class="edit-store-btn text-sky-600 hover:text-sky-700 px-2 text-sm font-semibold" data-store="${escapeHtml(store)}" title="Editar loja"><i class="fa-solid fa-pen"></i></button>
+        <button type="button" class="remove-store-btn text-red-500 hover:text-red-600 text-sm font-semibold" data-store="${escapeHtml(store)}" title="Excluir loja"><i class="fa-solid fa-trash mr-1"></i>Excluir</button>
+      </div>
+    `;
+    list.appendChild(li);
+  });
+}
+
+function startStoreEdit(button) {
+  const li = button.closest('li');
+  const storeName = button.dataset.store;
+  li.innerHTML = `
+    <input type="text" class="store-edit-input flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" value="${escapeHtml(storeName)}">
+    <div class="flex items-center gap-1">
+      <button type="button" class="store-edit-save bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm font-semibold" title="Salvar">Salvar</button>
+      <button type="button" class="store-edit-cancel text-slate-500 hover:text-slate-700 rounded-lg px-3 py-2 text-sm font-semibold" title="Cancelar">Cancelar</button>
+    </div>
+  `;
+  const input = li.querySelector('.store-edit-input');
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitStoreEdit(li, storeName);
+    } else if (event.key === 'Escape') {
+      renderStoreList();
+    }
+  });
+  input.focus();
+  input.select();
+}
+
+async function commitStoreEdit(li, oldName) {
+  const input = li.querySelector('.store-edit-input');
+  const newName = (input.value || '').trim().toUpperCase();
+  if (!newName) {
+    input.focus();
+    return;
   }
-  alert('Esta loja já está cadastrada.');
+  if (normalizeText(newName) === normalizeText(oldName)) {
+    renderStoreList();
+    return;
+  }
+  const stores = getStoreList();
+  if (stores.some(store => normalizeText(store) === normalizeText(newName))) {
+    alert('Já existe uma loja com este nome.');
+    return;
+  }
+  await renameStore(oldName, newName);
+  renderStoreList();
+}
+
+async function renameStore(oldName, newName) {
+  const stores = getStoreList().map(store =>
+    normalizeText(store) === normalizeText(oldName) ? newName : store
+  );
+  let recalculated = false;
+  employeesData.forEach(emp => {
+    ASSIGNMENT_KEYS.forEach(key => {
+      if (normalizeText(emp[key]) === normalizeText(oldName)) {
+        emp[key] = newName;
+        recalculated = true;
+      }
+    });
+  });
+  await saveStoreList(stores);
+  if (recalculated) await saveData();
+  refreshUI();
+}
+
+async function addStoreFromInput() {
+  const input = document.getElementById('newStoreInput');
+  const store = (input.value || '').trim();
+  if (!store) return;
+  const normalizedStore = store.toUpperCase();
+  await addStore(normalizedStore);
+  renderStoreList();
+  input.value = '';
+  input.focus();
+}
+
+async function deleteStore(storeName) {
+  if (!confirm(`Excluir a loja "${storeName}" da lista padrão?`)) return;
+  const stores = getStoreList().filter(store => normalizeText(store) !== normalizeText(storeName));
+  await saveStoreList(stores);
+  renderStoreList();
 }
 
 function formatShortDate(date) {
@@ -968,7 +1066,42 @@ document.getElementById('adminList').addEventListener('click', (event) => {
   }
 });
 
+// Delegação de eventos para gerenciar lojas (editar/salvar/cancelar/excluir)
+document.getElementById('storeList').addEventListener('click', (event) => {
+  const editButton = event.target.closest('.edit-store-btn');
+  if (editButton && editButton.dataset && editButton.dataset.store) {
+    startStoreEdit(editButton);
+    return;
+  }
+  const saveButton = event.target.closest('.store-edit-save');
+  if (saveButton) {
+    commitStoreEdit(saveButton.closest('li'), saveButton.closest('li').dataset.storeName);
+    return;
+  }
+  const cancelButton = event.target.closest('.store-edit-cancel');
+  if (cancelButton) {
+    renderStoreList();
+    return;
+  }
+  const removeButton = event.target.closest('.remove-store-btn');
+  if (removeButton && removeButton.dataset && removeButton.dataset.store) {
+    deleteStore(removeButton.dataset.store);
+  }
+});
+
 document.addEventListener('keydown', event => {
-  const modal = document.getElementById('employeeModal');
-  if (event.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal();
+  if (event.key === 'Escape') {
+    const editingInput = document.querySelector('#storeList .store-edit-input');
+    if (editingInput) {
+      renderStoreList();
+      return;
+    }
+    const storeModal = document.getElementById('storeModal');
+    const employeeModal = document.getElementById('employeeModal');
+    if (storeModal && !storeModal.classList.contains('hidden')) closeStoreModal();
+    else if (employeeModal && !employeeModal.classList.contains('hidden')) closeModal();
+  }
+  if (event.key === 'Enter' && document.activeElement && document.activeElement.id === 'newStoreInput') {
+    addStoreFromInput();
+  }
 });

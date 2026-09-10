@@ -71,6 +71,7 @@
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" onclick="openAddModal()" class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fa-solid fa-user-plus mr-2"></i>Colaborador</button>
+          <a href="publico.html" target="_blank" class="flex items-center bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-semibold" title="Abrir a visualização pública da escala em nova aba"><i class="fa-solid fa-eye mr-2"></i>Ver escala pública</a>
           <button type="button" onclick="window.print()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fa-solid fa-print mr-2"></i>Imprimir</button>
           <button type="button" onclick="exportCSV()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fa-solid fa-file-csv mr-2"></i>Exportar</button>
           <button type="button" onclick="resetData()" class="border border-slate-600 hover:bg-red-900/30 px-3 py-2 rounded-lg text-sm" title="Restaurar dados"><i class="fa-solid fa-rotate-left"></i></button>
@@ -106,7 +107,7 @@
         </div>
         <select id="filterStatus" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="ALL">Todos os status</option><option value="FERIAS">Em férias</option><option value="ATIVOS">Em atividade</option></select>
         <select id="filterLocation" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm"><option value="ALL">Todas as lojas</option></select>
-        <button type="button" onclick="addStore()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>Nova loja</button>
+        <button type="button" onclick="openStoreManager()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-store mr-1"></i>Gerenciar lojas</button>
       </div>
       <div class="flex bg-slate-100 p-1 rounded-lg w-fit mt-4">
         <button id="tabTableBtn" onclick="switchTab('table')" class="px-4 py-2 rounded-md text-sm font-semibold bg-white shadow-sm">Escala</button>
@@ -176,6 +177,21 @@
     </section>
   </main>
   </div><!-- /appContent -->
+
+  <!-- Modal Gerenciar Lojas -->
+  <div id="storeModal" role="dialog" aria-modal="true" class="fixed inset-0 hidden bg-slate-950/60 z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-2xl w-full mx-auto my-8 p-6 shadow-xl">
+      <div class="flex items-center justify-between border-b pb-4"><h2 class="text-xl font-bold">Gerenciar lojas</h2><button type="button" onclick="closeStoreModal()" class="text-slate-400 hover:text-slate-700 text-xl"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="flex gap-2 mt-5">
+        <input id="newStoreInput" type="text" placeholder="Nome da nova loja" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500">
+        <button type="button" onclick="addStoreFromInput()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>Adicionar</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2"><i class="fa-solid fa-circle-info mr-1"></i>Excluir uma loja não remove as escalas já atribuídas a ela, apenas a tira da lista padrão.</p>
+      <ul id="storeList" class="mt-4 divide-y divide-slate-200"></ul>
+      <div id="storesEmptyMsg" class="hidden mt-4 text-center text-slate-500 text-sm py-6">Nenhuma loja cadastrada.</div>
+      <div class="flex justify-end border-t mt-6 pt-5"><button type="button" onclick="closeStoreModal()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold">Fechar</button></div>
+    </div>
+  </div>
 
   <div id="employeeModal" role="dialog" aria-modal="true" class="fixed inset-0 hidden bg-slate-950/60 z-50 p-4 overflow-y-auto">
     <div class="bg-white rounded-2xl max-w-4xl w-full mx-auto my-8 p-6 shadow-xl">
