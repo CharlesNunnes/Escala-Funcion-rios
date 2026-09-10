@@ -5,6 +5,10 @@
 const ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
 const DAY_NAMES = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+let publicEmployees = [];
+let managersCache = [];
+let managerUnsubscribe = null;
+
 function normalizeText(value) {
   return String(value || '').trim().toLocaleLowerCase('pt-BR')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -14,6 +18,58 @@ function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/g, char => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   }[char]));
+}
+
+function getAssignments(emp) {
+  return ASSIGNMENT_KEYS.map(key => String(emp[key] || '-')).filter(val => val && val !== '-');
+}
+
+function canonToken(token) {
+  const aliases = { sh: 'shop', eud: 'eudora' };
+  const clean = String(token).replace(/[^\p{L}\p{N}]+/gu, '');
+  return aliases[clean] || clean;
+}
+
+function tokenMatch(ta, tb) {
+  const a = canonToken(ta);
+  const b = canonToken(tb);
+  if (a.length < 3 || b.length < 3) return false;
+  return a === b || (a.length >= 4 && a.startsWith(b)) || (b.length >= 4 && b.startsWith(a));
+}
+
+function storeNameMatches(scaleName, managerStore) {
+  const a = normalizeText(scaleName);
+  const b = normalizeText(managerStore);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const minSub = 4;
+  const unitSuffix = /^(\d+|[ivx]+|norte|sul|leste|oeste|centro)$/;
+  if (a.length >= minSub && b.includes(a)) {
+    const rest = b.slice(a.length).trim();
+    if (!(rest && unitSuffix.test(rest))) return true;
+  }
+  if (b.length >= minSub && a.includes(b)) {
+    const rest = a.slice(b.length).trim();
+    if (!(rest && unitSuffix.test(rest))) return true;
+  }
+  const tokensA = a.split(/\s+/).filter(Boolean);
+  const tokensB = b.split(/\s+/).filter(Boolean);
+  const matchedA = new Set();
+  const matchedB = new Set();
+  tokensA.forEach(ta => tokensB.forEach(tb => {
+    if (tokenMatch(ta, tb)) {
+      matchedA.add(canonToken(ta));
+      matchedB.add(canonToken(tb));
+    }
+  }));
+  const fullA = matchedA.size >= tokensA.length;
+  const fullB = matchedB.size >= tokensB.length;
+  if (fullA || fullB) return true;
+  const unmatchedA = tokensA.filter(t => !matchedA.has(canonToken(t)) && canonToken(t).length >= 4);
+  const unmatchedB = tokensB.filter(t => !matchedB.has(canonToken(t)) && canonToken(t).length >= 4);
+  const overlapCount = matchedA.size;
+  if (overlapCount >= 2 && !(unmatchedA.length && unmatchedB.length)) return true;
+  return false;
 }
 
 function getPeriodDates() {
@@ -84,6 +140,86 @@ function setState(state) {
   document.getElementById('errorState').classList.toggle('hidden', state !== 'error');
 }
 
+function renderManagerBanner(manager) {
+  const banner = document.getElementById('managerBanner');
+  const title = document.getElementById('managerBannerTitle');
+  const stores = document.getElementById('managerBannerStores');
+  if (!manager) {
+    banner.classList.add('hidden');
+    return;
+  }
+  stores.innerHTML = '';
+  const managerStores = Array.isArray(manager.stores) ? manager.stores : [];
+  title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s):';
+  managerStores.forEach(store => {
+    const chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-1 bg-white border border-emerald-300 text-emerald-800 text-xs font-semibold px-2 py-1 rounded-md';
+    chip.innerHTML = '<i class="fa-solid fa-store"></i>' + escapeHtml(store);
+    stores.appendChild(chip);
+  });
+  banner.classList.remove('hidden');
+}
+
+function populatePublicPersonDropdown() {
+  const select = document.getElementById('filterPerson');
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = '<option value="">Todas as pessoas (escala completa)</option>';
+
+  const byName = (a, b) => normalizeText(a).localeCompare(normalizeText(b));
+
+  if (managersCache.length) {
+    const group = document.createElement('optgroup');
+    group.label = 'Gerentes';
+    managersCache.slice().sort((a, b) => byName(a.hub, b.hub)).forEach(manager => {
+      const option = document.createElement('option');
+      option.value = 'mgr:' + manager.hub;
+      option.textContent = manager.hub;
+      group.appendChild(option);
+    });
+    select.appendChild(group);
+  }
+
+  if (publicEmployees.length) {
+    const group = document.createElement('optgroup');
+    group.label = 'Funcionários';
+    publicEmployees.slice().sort((a, b) => byName(a.name, b.name)).forEach(emp => {
+      const option = document.createElement('option');
+      option.value = 'emp:' + emp.id;
+      option.textContent = emp.name;
+      group.appendChild(option);
+    });
+    select.appendChild(group);
+  }
+
+  if (previous) select.value = previous;
+}
+
+function applyPublicFilter() {
+  loadPublicSchedule();
+}
+
+function getSelectedManager() {
+  const personFilter = document.getElementById('filterPerson').value;
+  if (personFilter && personFilter.startsWith('mgr:')) {
+    return managersCache.find(m => normalizeText(m.hub) === normalizeText(personFilter.slice(4))) || null;
+  }
+  return null;
+}
+
+function setupManagersListener() {
+  if (managerUnsubscribe || !db) return;
+  managerUnsubscribe = db.collection('managers')
+    .onSnapshot(snapshot => {
+      managersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      populatePublicPersonDropdown();
+    }, error => {
+      console.error('Erro ao escutar gerentes:', error);
+      const hint = document.getElementById('publicFilterHint');
+      if (hint) hint.textContent = 'Filtro por gerente indisponível: libere a leitura pública de "managers" nas regras do Firestore.';
+    });
+}
+
 async function loadPublicSchedule() {
   setState('table');
   const tbody = document.getElementById('publicTableBody');
@@ -94,12 +230,34 @@ async function loadPublicSchedule() {
       db.collection('config').doc('stores').get()
     ]);
 
-    const employees = empSnapshot.docs.map(doc => {
+    publicEmployees = empSnapshot.docs.map(doc => {
       const data = doc.data() || {};
       return { id: doc.id, ...data };
     });
+    populatePublicPersonDropdown();
 
-    if (!employees.length) {
+    const selectedManager = getSelectedManager();
+    renderManagerBanner(selectedManager);
+
+    const personFilter = document.getElementById('filterPerson').value;
+    const filtered = publicEmployees.filter(emp => {
+      if (!personFilter) return true;
+      if (personFilter.startsWith('emp:')) {
+        return personFilter === 'emp:' + String(emp.id);
+      }
+      if (selectedManager && Array.isArray(selectedManager.stores)) {
+        return getAssignments(emp).some(val => selectedManager.stores.some(store => storeNameMatches(val, store)));
+      }
+      return false;
+    });
+
+    if (!filtered.length) {
+      const emptyText = document.querySelector('#emptyState p');
+      if (emptyText) {
+        emptyText.textContent = personFilter
+          ? 'Nenhum funcionário encontrado para esta pessoa.'
+          : 'Nenhuma escala publicada no momento.';
+      }
       setState('empty');
       return;
     }
@@ -108,7 +266,7 @@ async function loadPublicSchedule() {
 
     const periodDates = getPeriodDates();
 
-    employees.forEach(emp => {
+    filtered.forEach(emp => {
       const tr = document.createElement('tr');
       tr.className = 'border-b border-slate-200/60';
 
@@ -134,4 +292,5 @@ async function loadPublicSchedule() {
 document.addEventListener('DOMContentLoaded', () => {
   updatePeriodHeader();
   loadPublicSchedule();
+  setupManagersListener();
 });

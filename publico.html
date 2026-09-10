@@ -48,7 +48,23 @@
       </div>
     </div>
 
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6 no-print">
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div class="flex-1">
+          <label class="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide"><i class="fa-solid fa-user mr-1"></i>Ver minha escala</label>
+          <select id="filterPerson" onchange="applyPublicFilter()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" title="Escolha seu nome (funcionário) ou o de um gerente para ver apenas o que é seu">
+            <option value="">Todas as pessoas (escala completa)</option>
+          </select>
+        </div>
+        <p class="text-xs text-slate-400 sm:self-end" id="publicFilterHint"><i class="fa-solid fa-circle-info mr-1"></i>Funcionário vê a própria escala; gerente vê os funcionários das lojas que gerencia.</p>
+      </div>
+    </section>
+
     <section id="tableView" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div id="managerBanner" class="hidden bg-emerald-50 border-b border-emerald-200 px-4 py-3 no-print">
+        <p class="text-sm font-bold text-emerald-800" id="managerBannerTitle"></p>
+        <div class="flex flex-wrap gap-2 mt-2" id="managerBannerStores"></div>
+      </div>
       <div class="overflow-x-auto">
         <table id="escalaTable" class="w-full text-left border-collapse">
           <thead><tr class="bg-slate-800 text-white text-xs uppercase tracking-wide">
