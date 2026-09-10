@@ -168,6 +168,20 @@ function isSpecialAssignment(value) {
   return !value || value === '-' || ['feriado', 'ferias', 'folga', 'atestado'].includes(normalized);
 }
 
+// Correspondência de loja entre a escala e a base de gerentes (aceita abreviações)
+function storeNameMatches(scaleName, managerStore) {
+  const a = normalizeText(scaleName);
+  const b = normalizeText(managerStore);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const minSub = 4;
+  if (a.length >= minSub && b.includes(a)) return true;
+  if (b.length >= minSub && a.includes(b)) return true;
+  const tokensA = a.split(/\s+/);
+  const tokensB = b.split(/\s+/);
+  return tokensA.some(ta => ta.length >= 3 && tokensB.some(tb => tb.length >= 3 && (ta.startsWith(tb) || tb.startsWith(ta))));
+}
+
 let storesSyncPending = false;
 
 async function ensureStoresDoc() {
@@ -537,6 +551,7 @@ function setupFirestoreListeners() {
     .onSnapshot(snapshot => {
       managersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       populatePersonDropdown();
+      renderManagersAdmin();
     }, error => {
       console.error('Erro ao escutar gerentes:', error);
     });
@@ -653,6 +668,62 @@ async function seedManagers() {
   } catch (error) {
     managersSeeded = false;
     console.error('Erro ao semear gerentes:', error);
+  }
+}
+
+function renderManagersAdmin() {
+  const count = document.getElementById('managersCount');
+  const list = document.getElementById('managersList');
+  if (!count || !list) return;
+  count.textContent = managersCache.length;
+  list.innerHTML = '';
+  if (!managersCache.length) {
+    list.innerHTML = '<p class="text-sm text-slate-400 col-span-full">Nenhum gerente importado ainda. Clique em "Importar gerentes do seed".</p>';
+    return;
+  }
+  managersCache
+    .slice()
+    .sort((a, b) => normalizeText(a.hub).localeCompare(normalizeText(b.hub)))
+    .forEach(manager => {
+      const card = document.createElement('div');
+      card.className = 'border border-slate-200 rounded-lg p-3';
+      card.innerHTML =
+        '<p class="font-semibold text-slate-800 text-sm">' + escapeHtml(manager.hub) + '</p>' +
+        '<p class="text-xs text-slate-500 mt-1">' + (Array.isArray(manager.stores) ? manager.stores : []).map(escapeHtml).join(', ') + '</p>';
+      list.appendChild(card);
+    });
+}
+
+async function importManagers() {
+  const status = document.getElementById('managersStatus');
+  if (!status) return;
+  if (!isUsingFirebase() || !isAdminUser) {
+    status.textContent = 'Faça login como administrador para importar os gerentes.';
+    return;
+  }
+  if (!window.MANAGERS_SEED || !Array.isArray(window.MANAGERS_SEED.managers)) {
+    status.textContent = 'Dados de seed não encontrados.';
+    return;
+  }
+  status.textContent = 'Importando...';
+  try {
+    await db.collection('managers').get();
+    const batch = db.batch();
+    window.MANAGERS_SEED.managers.forEach(manager => {
+      const name = String(manager.hub || '').replace(/^Hub\s+/i, '');
+      const id = 'hub-' + normalizeText(name).replace(/\s+/g, '-');
+      batch.set(db.collection('managers').doc(id), {
+        name,
+        hub: manager.hub,
+        division: window.MANAGERS_SEED.division,
+        stores: manager.stores || [],
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    });
+    await batch.commit();
+    status.textContent = 'Importação concluída com sucesso! (' + window.MANAGERS_SEED.managers.length + ' gerentes)';
+  } catch (error) {
+    status.textContent = 'Erro na importação: ' + (error.message || error);
   }
 }
 
@@ -864,11 +935,38 @@ function formatCellBadge(text) {
 }
 
 // Renderizar tabela principal
+function renderManagerBanner(manager) {
+  const banner = document.getElementById('managerBanner');
+  const title = document.getElementById('managerBannerTitle');
+  const stores = document.getElementById('managerBannerStores');
+  if (!manager) {
+    banner.classList.add('hidden');
+    return;
+  }
+  stores.innerHTML = '';
+  const managerStores = Array.isArray(manager.stores) ? manager.stores : [];
+  title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s):';
+  managerStores.forEach(store => {
+    const chip = document.createElement('span');
+    chip.className = 'inline-flex items-center gap-1 bg-white border border-emerald-300 text-emerald-800 text-xs font-semibold px-2 py-1 rounded-md';
+    chip.innerHTML = '<i class="fa-solid fa-store"></i>' + escapeHtml(store);
+    stores.appendChild(chip);
+  });
+  banner.classList.remove('hidden');
+}
+
 function renderTable() {
   const tbody = document.getElementById('tableBody');
   const searchVal = normalizeText(document.getElementById('searchInput').value);
   const statusFilter = document.getElementById('filterStatus').value;
   const locationFilter = document.getElementById('filterLocation').value;
+  const personFilter = document.getElementById('filterPerson').value;
+
+  let selectedManager = null;
+  if (personFilter && personFilter.startsWith('mgr:')) {
+    selectedManager = managersCache.find(m => normalizeText(m.hub) === normalizeText(personFilter.slice(4))) || null;
+  }
+  renderManagerBanner(selectedManager);
 
   tbody.innerHTML = '';
   let visibleCount = 0;
@@ -880,17 +978,14 @@ function renderTable() {
       getAssignments(emp).some(val => normalizeText(val).includes(searchVal));
 
     // Filtro por pessoa (funcionário ou gerente)
-    const personFilter = document.getElementById('filterPerson').value;
     let matchesPerson = true;
     if (personFilter) {
       if (personFilter.startsWith('emp:')) {
         matchesPerson = personFilter === 'emp:' + String(emp.id);
       } else if (personFilter.startsWith('mgr:')) {
-        const hub = personFilter.slice(4);
-        const manager = managersCache.find(m => normalizeText(m.hub) === normalizeText(hub));
-        if (manager && Array.isArray(manager.stores)) {
+        if (selectedManager && Array.isArray(selectedManager.stores)) {
           matchesPerson = getAssignments(emp).some(val =>
-            manager.stores.some(store => normalizeText(val) === normalizeText(store)));
+            selectedManager.stores.some(store => storeNameMatches(val, store)));
         } else {
           matchesPerson = false;
         }
@@ -1029,6 +1124,12 @@ function renderStoreCoverage() {
   const container = document.getElementById('storeCoverageContainer');
   container.innerHTML = '';
 
+  const personFilter = document.getElementById('filterPerson').value;
+  let selectedManager = null;
+  if (personFilter && personFilter.startsWith('mgr:')) {
+    selectedManager = managersCache.find(m => normalizeText(m.hub) === normalizeText(personFilter.slice(4))) || null;
+  }
+
   const storeMap = {};
 
   employeesData.forEach(emp => {
@@ -1046,10 +1147,15 @@ function renderStoreCoverage() {
     });
   });
 
-  const sortedStores = Object.keys(storeMap).sort();
+  const sortedStores = Object.keys(storeMap)
+    .filter(store => !selectedManager || (Array.isArray(selectedManager.stores) &&
+      selectedManager.stores.some(mStore => storeNameMatches(store, mStore))))
+    .sort();
 
   if (sortedStores.length === 0) {
-    container.innerHTML = '<p class="text-slate-500 text-sm">Nenhuma alocação em loja registrada.</p>';
+    container.innerHTML = selectedManager
+      ? '<p class="text-slate-500 text-sm">Nenhuma alocação encontrada nas lojas deste gerente.</p>'
+      : '<p class="text-slate-500 text-sm">Nenhuma alocação em loja registrada.</p>';
     return;
   }
 
