@@ -40,7 +40,7 @@ const INITIAL_DATA = [
 let employeesData = [];
 let storesCache = [];
 // Modelo mensal: um dia por coluna (d{today}..dN) do mês corrente até o fim do mês.
-// 6x1 => domingos = FOLGA. Datas passadas saem da tela (os dados continuam salvos).
+// Mostra apenas os dias úteis (Seg a Sáb); datas passadas e domingos saem da tela (dados salvos).
 function getMonthDays() {
   const now = new Date();
   const year = now.getFullYear();
@@ -49,7 +49,8 @@ function getMonthDays() {
   const startDay = now.getDate();
   const days = [];
   for (let day = startDay; day <= count; day++) {
-    days.push({ key: 'd' + day, date: new Date(year, month, day) });
+    const date = new Date(year, month, day);
+    if (date.getDay() !== 0) days.push({ key: 'd' + day, date });
   }
   return days;
 }
@@ -116,7 +117,7 @@ function normalizeEmployee(employee) {
   const normalized = migrateLegacyToDayKeys(employee);
   MONTH_DAYS.forEach(d => {
     if (normalized[d.key] == null || normalized[d.key] === '-') {
-      normalized[d.key] = d.date.getDay() === 0 ? 'FOLGA' : '-';
+      normalized[d.key] = '-';
     }
   });
   return normalized;
