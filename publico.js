@@ -160,38 +160,35 @@ function renderManagerBanner(manager) {
   banner.classList.remove('hidden');
 }
 
-function populatePublicPersonDropdown() {
-  const select = document.getElementById('filterPerson');
+function populatePublicEmployeeDropdown() {
+  const select = document.getElementById('filterEmployeeP');
   if (!select) return;
   const previous = select.value;
-  select.innerHTML = '<option value="">Todas as pessoas (escala completa)</option>';
-
-  const byName = (a, b) => normalizeText(a).localeCompare(normalizeText(b));
-
-  if (managersCache.length) {
-    const group = document.createElement('optgroup');
-    group.label = 'Gerentes';
-    managersCache.slice().sort((a, b) => byName(a.hub, b.hub)).forEach(manager => {
-      const option = document.createElement('option');
-      option.value = 'mgr:' + manager.hub;
-      option.textContent = manager.hub;
-      group.appendChild(option);
-    });
-    select.appendChild(group);
-  }
-
-  if (publicEmployees.length) {
-    const group = document.createElement('optgroup');
-    group.label = 'Funcionários';
-    publicEmployees.slice().sort((a, b) => byName(a.name, b.name)).forEach(emp => {
+  select.innerHTML = '<option value="">Todos os funcionários</option>';
+  publicEmployees.slice()
+    .sort((a, b) => normalizeText(a.name).localeCompare(normalizeText(b.name)))
+    .forEach(emp => {
       const option = document.createElement('option');
       option.value = 'emp:' + emp.id;
       option.textContent = emp.name;
-      group.appendChild(option);
+      select.appendChild(option);
     });
-    select.appendChild(group);
-  }
+  if (previous) select.value = previous;
+}
 
+function populatePublicManagerDropdown() {
+  const select = document.getElementById('filterManagerP');
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = '<option value="">Todos os gerentes</option>';
+  managersCache.slice()
+    .sort((a, b) => normalizeText(a.hub).localeCompare(normalizeText(b.hub)))
+    .forEach(manager => {
+      const option = document.createElement('option');
+      option.value = 'mgr:' + manager.hub;
+      option.textContent = manager.hub;
+      select.appendChild(option);
+    });
   if (previous) select.value = previous;
 }
 
@@ -200,7 +197,7 @@ function applyPublicFilter() {
 }
 
 function getSelectedManager() {
-  const personFilter = document.getElementById('filterPerson').value;
+  const personFilter = document.getElementById('filterManagerP').value;
   if (personFilter && personFilter.startsWith('mgr:')) {
     return managersCache.find(m => normalizeText(m.hub) === normalizeText(personFilter.slice(4))) || null;
   }
@@ -212,7 +209,7 @@ function setupManagersListener() {
   managerUnsubscribe = db.collection('managers')
     .onSnapshot(snapshot => {
       managersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      populatePublicPersonDropdown();
+      populatePublicManagerDropdown();
     }, error => {
       console.error('Erro ao escutar gerentes:', error);
       const hint = document.getElementById('publicFilterHint');
@@ -234,28 +231,30 @@ async function loadPublicSchedule() {
       const data = doc.data() || {};
       return { id: doc.id, ...data };
     });
-    populatePublicPersonDropdown();
+    populatePublicEmployeeDropdown();
 
     const selectedManager = getSelectedManager();
     renderManagerBanner(selectedManager);
 
-    const personFilter = document.getElementById('filterPerson').value;
+    const employeeValue = document.getElementById('filterEmployeeP').value;
     const filtered = publicEmployees.filter(emp => {
-      if (!personFilter) return true;
-      if (personFilter.startsWith('emp:')) {
-        return personFilter === 'emp:' + String(emp.id);
+      if (employeeValue && employeeValue.startsWith('emp:') && employeeValue !== 'emp:' + String(emp.id)) {
+        return false;
       }
       if (selectedManager && Array.isArray(selectedManager.stores)) {
-        return getAssignments(emp).some(val => selectedManager.stores.some(store => storeNameMatches(val, store)));
+        if (!getAssignments(emp).some(val => selectedManager.stores.some(store => storeNameMatches(val, store)))) {
+          return false;
+        }
       }
-      return false;
+      return true;
     });
 
     if (!filtered.length) {
       const emptyText = document.querySelector('#emptyState p');
+      const hasActiveFilter = !!(employeeValue || document.getElementById('filterManagerP').value);
       if (emptyText) {
-        emptyText.textContent = personFilter
-          ? 'Nenhum funcionário encontrado para esta pessoa.'
+        emptyText.textContent = hasActiveFilter
+          ? 'Nenhum funcionário encontrado para os filtros escolhidos.'
           : 'Nenhuma escala publicada no momento.';
       }
       setState('empty');
