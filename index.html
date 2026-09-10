@@ -123,10 +123,8 @@
       </div>
       <div class="overflow-x-auto">
         <table id="escalaTable" class="w-full text-left border-collapse">
-          <thead><tr class="bg-slate-800 text-white text-xs uppercase tracking-wide">
+          <thead><tr id="tableHeaderRow" class="bg-slate-800 text-white text-xs uppercase tracking-wide">
             <th class="py-3 px-4 sticky left-0 bg-slate-800 min-w-44">Funcionário</th>
-            <th data-day-index="0" class="py-3 px-3 text-center">Seg</th><th data-day-index="1" class="py-3 px-3 text-center">Ter</th><th data-day-index="2" class="py-3 px-3 text-center">Qua</th><th data-day-index="3" class="py-3 px-3 text-center">Qui</th><th data-day-index="4" class="py-3 px-3 text-center">Sex</th><th data-day-index="5" class="py-3 px-3 text-center">Sáb</th>
-            <th data-day-index="6" class="py-3 px-3 text-center">Seg</th><th data-day-index="7" class="py-3 px-3 text-center">Ter</th><th data-day-index="8" class="py-3 px-3 text-center">Qua</th><th data-day-index="9" class="py-3 px-3 text-center">Qui</th><th data-day-index="10" class="py-3 px-3 text-center">Sex</th><th data-day-index="11" class="py-3 px-3 text-center">Sáb</th>
             <th class="py-3 px-3 text-center no-print">Ações</th>
           </tr></thead>
           <tbody id="tableBody"></tbody>
@@ -213,14 +211,7 @@
         <input type="hidden" id="employeeId">
         <label class="block text-sm font-semibold mb-1">Nome do funcionário</label>
         <input id="fieldName" required class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-5 outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Ex.: Maria Silva">
-        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-          <script>
-            ['Seg','Ter','Qua','Qui','Sex','Sáb','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach((day, index) => {
-              const keys = ['seg1','ter1','qua1','qui1','sex1','sab1','seg2','ter2','qua2','qui2','sex2','sab2'];
-              document.write(`<label class="text-xs font-semibold text-slate-600">${day} <select id="field${keys[index]}" class="assignment-select block w-full mt-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"><option value="-">-</option></select></label>`);
-            });
-          </script>
-        </div>
+        <div id="fieldGrid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3"></div>
         <div class="flex justify-end gap-2 border-t mt-6 pt-5"><button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-lg">Cancelar</button><button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold">Salvar escala</button></div>
       </form>
     </div>

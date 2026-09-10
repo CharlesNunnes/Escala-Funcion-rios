@@ -85,7 +85,7 @@ main > .print-only {
 }
 
 #escalaTable {
-  table-layout: fixed;
+  table-layout: auto;
   width: 100%;
   min-width: 0;
   font-size: clamp(0.36rem, 0.52vw, 0.62rem);
@@ -93,19 +93,13 @@ main > .print-only {
 
 #escalaTable th:first-child,
 #escalaTable td:first-child {
-  width: 10%;
   padding-left: 0.15rem;
   padding-right: 0.15rem;
 }
 
-#escalaTable th:not(:first-child):not(:last-child),
-#escalaTable td:not(:first-child):not(:last-child) {
-  width: 5.8%;
-}
-
 #escalaTable th:last-child,
 #escalaTable td:last-child {
-  width: 6%;
+  width: 4rem;
 }
 
 #escalaTable th,
@@ -264,13 +258,7 @@ body {
     overflow: visible !important;
   }
   table {
-    table-layout: fixed !important;
-  }
-  th:first-child, td:first-child {
-    width: 19% !important;
-  }
-  th:not(:first-child), td:not(:first-child) {
-    width: 13.5% !important;
+    table-layout: auto !important;
   }
   thead {
     display: table-row-group;

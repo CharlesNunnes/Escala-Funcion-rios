@@ -2,8 +2,26 @@
 // Escala de Funcionários - Visualização Pública (somente leitura)
 // ============================================================
 
-const ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
-const DAY_NAMES = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+// Modelo mensal: um dia por coluna (d1..dN) cobrindo o mês corrente. 6x1 => domingos = FOLGA.
+function getMonthDays() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const count = new Date(year, month + 1, 0).getDate();
+  const days = [];
+  for (let day = 1; day <= count; day++) {
+    days.push({ key: 'd' + day, date: new Date(year, month, day) });
+  }
+  return days;
+}
+const MONTH_DAYS = getMonthDays();
+const ASSIGNMENT_KEYS = MONTH_DAYS.map(d => d.key);
+const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+function weekdayLabel(date) {
+  return WEEKDAY_LABELS[date.getDay()];
+}
+const LEGACY_WEEK_KEYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+const LEGACY_ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
 
 let publicEmployees = [];
 let managersCache = [];
@@ -14,23 +32,53 @@ function normalizeText(value) {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+function normalizeEmployee(employee) {
+  const normalized = migrateLegacyToDayKeys(employee);
+  MONTH_DAYS.forEach(d => {
+    if (normalized[d.key] == null || normalized[d.key] === '-') {
+      normalized[d.key] = d.date.getDay() === 0 ? 'FOLGA' : '-';
+    }
+  });
+  return normalized;
+}
+
+function migrateLegacyToDayKeys(employee) {
+  const result = { ...employee };
+  LEGACY_WEEK_KEYS.forEach((base, wi) => {
+    const target = getMonthWeekDayKey(0, wi);
+    if (target && result[base] != null && (result[target] == null || result[target] === '-')) {
+      result[target] = result[base];
+    }
+  });
+  LEGACY_ASSIGNMENT_KEYS.forEach(key => {
+    const m = /^(seg|ter|qua|qui|sex|sab)([12])$/.exec(key);
+    if (m) {
+      const wi = LEGACY_WEEK_KEYS.indexOf(m[1]);
+      const target = getMonthWeekDayKey(Number(m[2]) - 1, wi);
+      if (target && result[key] != null && (result[target] == null || result[target] === '-')) {
+        result[target] = result[key];
+      }
+    }
+  });
+  return result;
+}
+
+// Dia do mês correspondente a uma posição (weekIndex 0 ou 1; dowIndex 0=Seg..5=Sáb).
+function getMonthWeekDayKey(weekIndex, dowIndex) {
+  const first = MONTH_DAYS[0].date;
+  const y = first.getFullYear();
+  const m = first.getMonth();
+  let firstMonday = 1;
+  while (new Date(y, m, firstMonday).getDay() !== 1) firstMonday++;
+  const target = new Date(y, m, firstMonday + weekIndex * 7 + dowIndex);
+  if (target.getMonth() !== m) return null;
+  return 'd' + target.getDate();
+}
+
 function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/g, char => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   }[char]));
-}
-
-function normalizeEmployee(employee) {
-  const legacyKeys = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-  const normalized = { ...employee };
-  legacyKeys.forEach(key => {
-    if (normalized[key] && !normalized[`${key}1`]) normalized[`${key}1`] = normalized[key];
-    delete normalized[key];
-  });
-  ASSIGNMENT_KEYS.forEach(key => {
-    if (!normalized[key]) normalized[key] = '-';
-  });
-  return normalized;
 }
 
 function getAssignments(emp) {
@@ -38,15 +86,7 @@ function getAssignments(emp) {
 }
 
 function getPeriodDates() {
-  const today = new Date();
-  const monday = new Date(today);
-  const dayOfWeek = monday.getDay();
-  monday.setDate(monday.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  return Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index + Math.floor(index / 6) * 1);
-    return date;
-  });
+  return MONTH_DAYS.map(d => d.date);
 }
 
 function formatShortDate(date) {
@@ -69,7 +109,7 @@ function updatePeriodHeader() {
   document.querySelectorAll('#escalaTable th[data-day-index]').forEach(element => {
     const index = Number(element.dataset.dayIndex);
     const date = dates[index];
-    element.innerHTML = `<span class="day-name">${DAY_NAMES[index % 6]}</span><span class="day-date">${formatShortDate(date)}</span>`;
+    element.innerHTML = `<span class="day-name">${weekdayLabel(date)}</span><span class="day-date">${formatShortDate(date)}</span>`;
   });
 }
 
@@ -114,7 +154,7 @@ function renderManagerBanner(manager) {
     return;
   }
   stores.innerHTML = '';
-  const managerStores = Array.isArray(manager.stores) ? manager.stores : [];
+  const managerStores = getManagerStores(manager);
   title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s):';
   managerStores.forEach(store => {
     const chip = document.createElement('span');
@@ -206,8 +246,8 @@ async function loadPublicSchedule() {
         const matchesByName = employeeName ? normalizeText(emp.name) === normalizeText(employeeName) : false;
         if (!matchesById && !matchesByName) return false;
       }
-      if (selectedManager && Array.isArray(selectedManager.stores)) {
-        if (!getAssignments(emp).some(val => selectedManager.stores.some(store => Matching.storeNameMatches(val, store)))) {
+      if (selectedManager) {
+        if (!getAssignments(emp).some(val => getManagerStores(selectedManager).some(store => Matching.storeNameMatches(val, store)))) {
           return false;
         }
       }
@@ -240,7 +280,7 @@ async function loadPublicSchedule() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${DAY_NAMES[i % 6]} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
       `;
       tbody.appendChild(tr);
     });
@@ -253,7 +293,38 @@ async function loadPublicSchedule() {
   }
 }
 
+// Gera as colunas de dias do mês no cabeçalho da tabela pública
+function initTableHeaderRow() {
+  const row = document.getElementById('tableHeaderRow');
+  if (!row) return;
+  if (row.dataset.initialized) return;
+  row.dataset.initialized = '1';
+  MONTH_DAYS.forEach((d, i) => {
+    const th = document.createElement('th');
+    th.dataset.dayIndex = i;
+    th.className = 'py-2 px-2 text-center text-[10px] sm:text-xs';
+    row.appendChild(th);
+  });
+  updatePeriodHeader();
+}
+
+// Lojas efetivas de um gerente = doc do Firestore + seed local (fonte de verdade), sem duplicar.
+function getManagerStores(manager) {
+  const docStores = Array.isArray(manager.stores) ? manager.stores : [];
+  let seedStores = [];
+  if (window.MANAGERS_SEED && Array.isArray(window.MANAGERS_SEED.managers)) {
+    const sm = window.MANAGERS_SEED.managers.find(sm => normalizeText(sm.hub) === normalizeText(manager.hub));
+    if (sm && Array.isArray(sm.stores)) seedStores = sm.stores;
+  }
+  const result = docStores.slice();
+  seedStores.forEach(store => {
+    if (!result.some(existing => normalizeText(existing) === normalizeText(store))) result.push(store);
+  });
+  return result;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  initTableHeaderRow();
   updatePeriodHeader();
   loadPublicSchedule();
   setupManagersListener();

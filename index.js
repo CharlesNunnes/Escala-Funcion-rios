@@ -39,8 +39,26 @@ const INITIAL_DATA = [
 
 let employeesData = [];
 let storesCache = [];
-const ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
-const DAY_NAMES = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+// Modelo mensal: um dia por coluna (d1..dN) cobrindo o mês corrente. 6x1 => domingos = FOLGA.
+function getMonthDays() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const count = new Date(year, month + 1, 0).getDate();
+  const days = [];
+  for (let day = 1; day <= count; day++) {
+    days.push({ key: 'd' + day, date: new Date(year, month, day) });
+  }
+  return days;
+}
+const MONTH_DAYS = getMonthDays();
+const ASSIGNMENT_KEYS = MONTH_DAYS.map(d => d.key);
+const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+function weekdayLabel(date) {
+  return WEEKDAY_LABELS[date.getDay()];
+}
+const LEGACY_WEEK_KEYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+const LEGACY_ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
 const STORE_KEY = 'escala_operacional_varejo_stores';
 const DATA_KEY = 'escala_operacional_varejo_data';
 const MIGRATION_KEY = 'escala_firebase_migrated';
@@ -93,28 +111,52 @@ function getAssignments(employee) {
 }
 
 function normalizeEmployee(employee) {
-  const legacyKeys = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-  const normalized = { ...employee };
-  legacyKeys.forEach((key, index) => {
-    if (normalized[key] && !normalized[`${key}1`]) normalized[`${key}1`] = normalized[key];
-    delete normalized[key];
-  });
-  ASSIGNMENT_KEYS.forEach(key => {
-    if (!normalized[key]) normalized[key] = '-';
+  const normalized = migrateLegacyToDayKeys(employee);
+  MONTH_DAYS.forEach(d => {
+    if (normalized[d.key] == null || normalized[d.key] === '-') {
+      normalized[d.key] = d.date.getDay() === 0 ? 'FOLGA' : '-';
+    }
   });
   return normalized;
 }
 
-function getPeriodDates() {
-  const today = new Date();
-  const monday = new Date(today);
-  const dayOfWeek = monday.getDay();
-  monday.setDate(monday.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  return Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index + Math.floor(index / 6) * 1);
-    return date;
+// Converte o formato antigo (seg/ter/... e seg1..sab2) para o dia correspondente do mês,
+// ancorando semanas no primeiro Seg do mês (mantém o alinhamento da planilha original).
+function migrateLegacyToDayKeys(employee) {
+  const result = { ...employee };
+  LEGACY_WEEK_KEYS.forEach((base, wi) => {
+    const target = getMonthWeekDayKey(0, wi);
+    if (target && result[base] != null && (result[target] == null || result[target] === '-')) {
+      result[target] = result[base];
+    }
   });
+  LEGACY_ASSIGNMENT_KEYS.forEach(key => {
+    const m = /^(seg|ter|qua|qui|sex|sab)([12])$/.exec(key);
+    if (m) {
+      const wi = LEGACY_WEEK_KEYS.indexOf(m[1]);
+      const target = getMonthWeekDayKey(Number(m[2]) - 1, wi);
+      if (target && result[key] != null && (result[target] == null || result[target] === '-')) {
+        result[target] = result[key];
+      }
+    }
+  });
+  return result;
+}
+
+// Dia do mês correspondente a uma posição (weekIndex 0 ou 1; dowIndex 0=Seg..5=Sáb).
+function getMonthWeekDayKey(weekIndex, dowIndex) {
+  const first = MONTH_DAYS[0].date;
+  const y = first.getFullYear();
+  const m = first.getMonth();
+  let firstMonday = 1;
+  while (new Date(y, m, firstMonday).getDay() !== 1) firstMonday++;
+  const target = new Date(y, m, firstMonday + weekIndex * 7 + dowIndex);
+  if (target.getMonth() !== m) return null;
+  return 'd' + target.getDate();
+}
+
+function getPeriodDates() {
+  return MONTH_DAYS.map(d => d.date);
 }
 
 function getStoreListFromAssignments() {
@@ -337,6 +379,23 @@ function formatShortDate(date) {
   });
 }
 
+let tableHeadersInitialized = false;
+
+// Gera as colunas de dias do mês no cabeçalho da tabela (Funcionário | d1..dN | Ações)
+function initTableHeaders() {
+  const row = document.getElementById('tableHeaderRow');
+  if (!row || tableHeadersInitialized) return;
+  tableHeadersInitialized = true;
+  const actionsTh = row.querySelector('th.no-print');
+  MONTH_DAYS.forEach((d, i) => {
+    const th = document.createElement('th');
+    th.dataset.dayIndex = i;
+    th.className = 'py-2 px-2 text-center text-[10px] sm:text-xs';
+    row.insertBefore(th, actionsTh);
+  });
+  updatePrintPeriod();
+}
+
 function updatePrintPeriod() {
   const dates = getPeriodDates();
 
@@ -348,16 +407,36 @@ function updatePrintPeriod() {
   document.querySelectorAll('#escalaTable th[data-day-index]').forEach(element => {
     const index = Number(element.dataset.dayIndex);
     const date = dates[index];
-    element.innerHTML = `<span class="day-name">${DAY_NAMES[index % 6]}</span><span class="day-date">${formatShortDate(date)}</span>`;
+    element.innerHTML = `<span class="day-name">${weekdayLabel(date)}</span><span class="day-date">${formatShortDate(date)}</span>`;
   });
+}
+
+// Preenche os selects por dia do mês no modal de colaborador
+function buildEmployeeDayFields() {
+  const grid = document.getElementById('fieldGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  MONTH_DAYS.forEach(d => {
+    const label = document.createElement('label');
+    label.className = 'text-xs font-semibold text-slate-600';
+    label.innerHTML = `${d.date.getDate()}/${String(d.date.getMonth() + 1).padStart(2, '0')} <span class="text-slate-400">${weekdayLabel(d.date)}</span>`;
+    const select = document.createElement('select');
+    select.id = 'field' + d.key;
+    select.className = 'assignment-select block w-full mt-1 border border-slate-300 rounded-lg px-2 py-2 text-sm';
+    select.innerHTML = '<option value="-">-</option>';
+    label.appendChild(select);
+    grid.appendChild(label);
+  });
+  populateAssignmentSelects();
 }
 
 // Inicialização de elementos de UI que dependem de data
 function initPrintUI() {
   const now = new Date();
   document.getElementById('printDate').innerText = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  initTableHeaders();
+  buildEmployeeDayFields();
   updatePrintPeriod();
-  populateAssignmentSelects();
 }
 
 // ============================================================
@@ -939,6 +1018,17 @@ function formatCellBadge(text) {
 }
 
 // Renderizar tabela principal
+// Lojas efetivas de um gerente = doc do Firestore + seed local (fonte de verdade), sem duplicar.
+function getManagerStores(manager) {
+  const docStores = Array.isArray(manager.stores) ? manager.stores : [];
+  let seedStores = [];
+  if (window.MANAGERS_SEED && Array.isArray(window.MANAGERS_SEED.managers)) {
+    const sm = window.MANAGERS_SEED.managers.find(sm => normalizeText(sm.hub) === normalizeText(manager.hub));
+    if (sm && Array.isArray(sm.stores)) seedStores = sm.stores;
+  }
+  return mergeStoreLists(docStores, seedStores);
+}
+
 function renderManagerBanner(manager) {
   const banner = document.getElementById('managerBanner');
   const title = document.getElementById('managerBannerTitle');
@@ -948,7 +1038,7 @@ function renderManagerBanner(manager) {
     return;
   }
   stores.innerHTML = '';
-  const managerStores = Array.isArray(manager.stores) ? manager.stores : [];
+  const managerStores = getManagerStores(manager);
   title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s):';
   managerStores.forEach(store => {
     const chip = document.createElement('span');
@@ -988,9 +1078,9 @@ function renderTable() {
         const filterName = normalizeText(personFilter.slice(4));
         matchesPerson = normalizeText(emp.name) === filterName || personFilter === 'emp:' + String(emp.id);
       } else if (personFilter.startsWith('mgr:')) {
-        if (selectedManager && Array.isArray(selectedManager.stores)) {
+        if (selectedManager) {
           matchesPerson = getAssignments(emp).some(val =>
-            selectedManager.stores.some(store => Matching.storeNameMatches(val, store)));
+            getManagerStores(selectedManager).some(store => Matching.storeNameMatches(val, store)));
         } else {
           matchesPerson = false;
         }
@@ -1020,7 +1110,7 @@ function renderTable() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${DAY_NAMES[i % 6]} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
         <td class="py-2.5 px-3 text-center border-l border-slate-200 no-print actions-cell">
           <div class="flex items-center justify-center gap-1">
             <button onclick="editEmployee('${escapeHtml(String(emp.id))}')" title="Editar Escala" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
@@ -1138,10 +1228,13 @@ function renderStoreCoverage() {
   const storeMap = {};
 
   employeesData.forEach(emp => {
-    const days = ASSIGNMENT_KEYS.map((key, index) => ({
-      day: `${DAY_NAMES[index % 6]} (${formatShortDate(getPeriodDates()[index])})`,
-      val: emp[key]
-    }));
+    const days = ASSIGNMENT_KEYS.map((key, index) => {
+      const date = getPeriodDates()[index];
+      return {
+        day: `${weekdayLabel(date)} (${formatShortDate(date)})`,
+        val: emp[key]
+      };
+    });
 
     days.forEach(d => {
       const storeName = d.val ? d.val.trim() : '-';
@@ -1153,8 +1246,7 @@ function renderStoreCoverage() {
   });
 
   const sortedStores = Object.keys(storeMap)
-    .filter(store => !selectedManager || (Array.isArray(selectedManager.stores) &&
-      selectedManager.stores.some(mStore => Matching.storeNameMatches(store, mStore))))
+    .filter(store => !selectedManager || getManagerStores(selectedManager).some(mStore => Matching.storeNameMatches(store, mStore)))
     .sort();
 
   if (sortedStores.length === 0) {
@@ -1200,7 +1292,11 @@ function openAddModal() {
   document.getElementById('modalTitle').innerText = 'Adicionar Colaborador';
   document.getElementById('employeeForm').reset();
   document.getElementById('employeeId').value = '';
-  document.getElementById('fieldseg1').value = 'FERIADO';
+  const firstWork = getMonthWeekDayKey(0, 0);
+  if (firstWork) {
+    const el = document.getElementById('field' + firstWork);
+    if (el) el.value = 'FERIADO';
+  }
   document.getElementById('employeeModal').classList.remove('hidden');
 }
 
@@ -1315,7 +1411,7 @@ function switchTab(tab) {
 // Exportar CSV
 function exportCSV() {
   let csv = '\uFEFF'; // BOM para aceitar acentuação no Excel
-  csv += `Funcionário(a);${getPeriodDates().map((date, index) => `${formatShortDate(date)} (${DAY_NAMES[index % 6]})`).join(';')}\n`;
+  csv += `Funcionário(a);${getPeriodDates().map((date) => `${formatShortDate(date)} (${weekdayLabel(date)})`).join(';')}\n`;
 
   const csvCell = value => `"${String(value || '').replace(/"/g, '""')}"`;
   employeesData.forEach(emp => {
