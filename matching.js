@@ -39,6 +39,15 @@
     return null;
   }
 
+  // Tokens "neutros" da escala que não individuam a loja
+  // (ex.: "SH. SSA 2" vs "SSA II": o "SH." é só o marcador de loja)
+  const NEUTRAL_TOKENS = new Set(['shop', 'shopping', 'ssa', 'g']);
+
+  function isNeutral(value) {
+    return String(value || '').trim().split(/\s+/).filter(Boolean)
+      .every(token => numericValue(token) !== null || NEUTRAL_TOKENS.has(canonToken(token)));
+  }
+
   function tokenMatch(ta, tb) {
     const valueA = numericValue(ta);
     const valueB = numericValue(tb);
@@ -58,11 +67,15 @@
     const unitSuffix = /^(\d+|[ivx]+|norte|sul|leste|oeste|centro)$/;
     if (a.length >= minSub && b.includes(a)) {
       const rest = b.slice(a.length).trim();
-      if (!(rest && unitSuffix.test(rest))) return true;
+      if (!(rest && unitSuffix.test(rest))) {
+        if (!rest || isNeutral(rest)) return true;
+      }
     }
     if (b.length >= minSub && a.includes(b)) {
       const rest = a.slice(b.length).trim();
-      if (!(rest && unitSuffix.test(rest))) return true;
+      if (!(rest && unitSuffix.test(rest))) {
+        if (!rest || isNeutral(rest)) return true;
+      }
     }
 
     const tokensA = a.split(/\s+/).filter(Boolean);
@@ -78,7 +91,13 @@
 
     const fullA = matchedA.size >= tokensA.length;
     const fullB = matchedB.size >= tokensB.length;
-    if (fullA || fullB) return true;
+    if (fullA || fullB) {
+      // Se o gerente estiver todo "contido" na escala, os tokens extras da
+      // escala precisam ser neutros (senão "FERR COSTA PARALELA" casaria com
+      // a loja genérica "Ferreira Costa" da Tamires)
+      const extraScale = tokensA.filter(t => !matchedA.has(canonToken(t)));
+      return extraScale.every(isNeutral);
+    }
 
     const unmatchedA = tokensA.filter(t => !matchedA.has(canonToken(t)) && canonToken(t).length >= 4);
     const unmatchedB = tokensB.filter(t => !matchedB.has(canonToken(t)) && canonToken(t).length >= 4);
