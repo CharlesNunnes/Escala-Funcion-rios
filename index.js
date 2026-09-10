@@ -39,14 +39,16 @@ const INITIAL_DATA = [
 
 let employeesData = [];
 let storesCache = [];
-// Modelo mensal: um dia por coluna (d1..dN) cobrindo o mês corrente. 6x1 => domingos = FOLGA.
+// Modelo mensal: um dia por coluna (d{today}..dN) do mês corrente até o fim do mês.
+// 6x1 => domingos = FOLGA. Datas passadas saem da tela (os dados continuam salvos).
 function getMonthDays() {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
   const count = new Date(year, month + 1, 0).getDate();
+  const startDay = now.getDate();
   const days = [];
-  for (let day = 1; day <= count; day++) {
+  for (let day = startDay; day <= count; day++) {
     days.push({ key: 'd' + day, date: new Date(year, month, day) });
   }
   return days;
@@ -1292,11 +1294,10 @@ function openAddModal() {
   document.getElementById('modalTitle').innerText = 'Adicionar Colaborador';
   document.getElementById('employeeForm').reset();
   document.getElementById('employeeId').value = '';
-  const firstWork = getMonthWeekDayKey(0, 0);
-  if (firstWork) {
-    const el = document.getElementById('field' + firstWork);
-    if (el) el.value = 'FERIADO';
-  }
+  const firstWorkDay = MONTH_DAYS.find(d => d.date.getDay() === 1);
+  const firstWork = firstWorkDay ? firstWorkDay.key : MONTH_DAYS[0].key;
+  const el = document.getElementById('field' + firstWork);
+  if (el) el.value = 'FERIADO';
   document.getElementById('employeeModal').classList.remove('hidden');
 }
 

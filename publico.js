@@ -2,14 +2,16 @@
 // Escala de Funcionários - Visualização Pública (somente leitura)
 // ============================================================
 
-// Modelo mensal: um dia por coluna (d1..dN) cobrindo o mês corrente. 6x1 => domingos = FOLGA.
+// Modelo mensal: um dia por coluna (d{today}..dN) do mês corrente até o fim do mês.
+// 6x1 => domingos = FOLGA. Datas passadas saem da tela (os dados continuam salvos).
 function getMonthDays() {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
   const count = new Date(year, month + 1, 0).getDate();
+  const startDay = now.getDate();
   const days = [];
-  for (let day = 1; day <= count; day++) {
+  for (let day = startDay; day <= count; day++) {
     days.push({ key: 'd' + day, date: new Date(year, month, day) });
   }
   return days;
