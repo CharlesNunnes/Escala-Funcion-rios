@@ -20,6 +20,19 @@ function escapeHtml(value) {
   }[char]));
 }
 
+function normalizeEmployee(employee) {
+  const legacyKeys = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+  const normalized = { ...employee };
+  legacyKeys.forEach(key => {
+    if (normalized[key] && !normalized[`${key}1`]) normalized[`${key}1`] = normalized[key];
+    delete normalized[key];
+  });
+  ASSIGNMENT_KEYS.forEach(key => {
+    if (!normalized[key]) normalized[key] = '-';
+  });
+  return normalized;
+}
+
 function getAssignments(emp) {
   return ASSIGNMENT_KEYS.map(key => String(emp[key] || '-')).filter(val => val && val !== '-');
 }
@@ -121,7 +134,7 @@ function populatePublicEmployeeDropdown() {
     .sort((a, b) => normalizeText(a.name).localeCompare(normalizeText(b.name)))
     .forEach(emp => {
       const option = document.createElement('option');
-      option.value = 'emp:' + emp.id;
+      option.value = 'emp:' + normalizeText(emp.name);
       option.textContent = emp.name;
       select.appendChild(option);
     });
@@ -178,7 +191,7 @@ async function loadPublicSchedule() {
 
     publicEmployees = empSnapshot.docs.map(doc => {
       const data = doc.data() || {};
-      return { id: doc.id, ...data };
+      return { id: doc.id, ...normalizeEmployee(data) };
     });
     populatePublicEmployeeDropdown();
 
@@ -186,9 +199,12 @@ async function loadPublicSchedule() {
     renderManagerBanner(selectedManager);
 
     const employeeValue = document.getElementById('filterEmployeeP').value;
+    const employeeName = employeeValue && employeeValue.startsWith('emp:') ? employeeValue.slice(4) : null;
     const filtered = publicEmployees.filter(emp => {
-      if (employeeValue && employeeValue.startsWith('emp:') && employeeValue !== 'emp:' + String(emp.id)) {
-        return false;
+      if (employeeValue && employeeValue.startsWith('emp:')) {
+        const matchesById = employeeValue === 'emp:' + String(emp.id);
+        const matchesByName = employeeName ? normalizeText(emp.name) === normalizeText(employeeName) : false;
+        if (!matchesById && !matchesByName) return false;
       }
       if (selectedManager && Array.isArray(selectedManager.stores)) {
         if (!getAssignments(emp).some(val => selectedManager.stores.some(store => Matching.storeNameMatches(val, store)))) {

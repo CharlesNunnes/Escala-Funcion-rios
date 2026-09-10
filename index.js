@@ -985,7 +985,8 @@ function renderTable() {
     let matchesPerson = true;
     if (personFilter) {
       if (personFilter.startsWith('emp:')) {
-        matchesPerson = personFilter === 'emp:' + String(emp.id);
+        const filterName = normalizeText(personFilter.slice(4));
+        matchesPerson = normalizeText(emp.name) === filterName || personFilter === 'emp:' + String(emp.id);
       } else if (personFilter.startsWith('mgr:')) {
         if (selectedManager && Array.isArray(selectedManager.stores)) {
           matchesPerson = getAssignments(emp).some(val =>
@@ -1113,7 +1114,7 @@ function populatePersonDropdown() {
       .sort((a, b) => byName(a.name, b.name))
       .forEach(emp => {
         const option = document.createElement('option');
-        option.value = 'emp:' + emp.id;
+        option.value = 'emp:' + normalizeText(emp.name);
         option.textContent = emp.name;
         group.appendChild(option);
       });
