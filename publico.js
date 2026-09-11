@@ -2,18 +2,20 @@
 // Escala de Funcionários - Visualização Pública (somente leitura)
 // ============================================================
 
-// Modelo semanal na visualização pública: mostra apenas a semana corrente
-// (Segunda a Sábado) — o período que o funcionário/gerente consulta.
+// Modelo semanal na visualização pública: mostra o período atual da semana
+// (do dia de hoje até o sábado), que é o escopo que o funcionário/gerente consulta
+// e o intervalo de dias com dados salvos pelo painel restrito.
 function getMonthDays() {
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const offsetToMonday = (today.getDay() + 6) % 7; // dias desde o início da semana
-  const monday = new Date(now.getFullYear(), now.getMonth(), today.getDate() - offsetToMonday);
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (start.getDay() === 0) start.setDate(start.getDate() + 1); // domingo => começa na segunda
   const days = [];
-  for (let i = 0; i < 6; i++) {
-    const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-    days.push({ key: 'd' + date.getDate(), date });
+  const day = new Date(start);
+  while (day.getDay() !== 6) { // 6 = Sábado
+    days.push({ key: 'd' + day.getDate(), date: new Date(day) });
+    day.setDate(day.getDate() + 1);
   }
+  days.push({ key: 'd' + day.getDate(), date: new Date(day) });
   return days;
 }
 const MONTH_DAYS = getMonthDays();
