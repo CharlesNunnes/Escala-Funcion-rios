@@ -45,6 +45,9 @@ function normalizeEmployee(employee) {
       normalized[d.key] = '-';
     }
   });
+  // Remove as chaves antigas para não poluir nada que venha a ser gravado.
+  LEGACY_WEEK_KEYS.forEach(key => delete normalized[key]);
+  LEGACY_ASSIGNMENT_KEYS.forEach(key => delete normalized[key]);
   return normalized;
 }
 

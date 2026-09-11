@@ -137,6 +137,10 @@ function normalizeEmployee(employee) {
       normalized[d.key] = '-';
     }
   });
+  // Remove as chaves antigas para os dados ficarem limpos: elas não são mais
+  // usadas (migração só ocorre em docs sem dN) e poluem o doc no Firestore.
+  LEGACY_WEEK_KEYS.forEach(key => delete normalized[key]);
+  LEGACY_ASSIGNMENT_KEYS.forEach(key => delete normalized[key]);
   return normalized;
 }
 
@@ -270,12 +274,25 @@ async function ensureStoresDoc() {
 }
 
 function populateAssignmentSelects() {
+  const storeOptions = getRegisteredStoreList()
+    .slice()
+    .sort((a, b) => normalizeText(a).localeCompare(normalizeText(b)))
+    .map(store => `<option value="${escapeHtml(store)}">${escapeHtml(store)}</option>`)
+    .join('');
   const options = ['<option value="-">-</option>', '<option value="FERIADO">FERIADO</option>', '<option value="FÉRIAS">FÉRIAS</option>', '<option value="FOLGA">FOLGA</option>', '<option value="ATESTADO">ATESTADO</option>']
-    .concat(getStoreList().sort().map(store => `<option value="${escapeHtml(store)}">${escapeHtml(store)}</option>`))
+    .concat(storeOptions)
     .join('');
   document.querySelectorAll('.assignment-select').forEach(select => {
     const currentValue = select.value;
     select.innerHTML = options;
+    // Preserva valores variantes já gravados na escala (senão o select ficaria
+    // sem opção e perderia o dado ao salvar).
+    if (currentValue && !Array.from(select.options).some(opt => opt.value === currentValue)) {
+      const extra = document.createElement('option');
+      extra.value = currentValue;
+      extra.textContent = currentValue;
+      select.appendChild(extra);
+    }
     select.value = currentValue || '-';
   });
 }
@@ -597,7 +614,7 @@ function enterLocalMode() {
   } else {
     employeesData = INITIAL_DATA.map(normalizeEmployee);
   }
-  if (!storesCache.length) storesCache = [...DEFAULT_STORES];
+  if (!storesCache.length) storesCache = [...getHubBaseStores()];
   initPrintUI();
   showApp();
   refreshUI();
@@ -677,10 +694,16 @@ async function migrateLocalToFirestore() {
 function setupFirestoreListeners() {
   employeeUnsubscribe = db.collection('employees')
     .onSnapshot(snapshot => {
-      employeesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...normalizeEmployee(doc.data())
-      }));
+      const toClean = [];
+      employeesData = snapshot.docs.map(doc => {
+        const raw = doc.data() || {};
+        const hasLegacy = LEGACY_WEEK_KEYS.some(k => raw[k] != null) ||
+          LEGACY_ASSIGNMENT_KEYS.some(k => raw[k] != null);
+        const normalized = { id: doc.id, ...normalizeEmployee(raw) };
+        if (hasLegacy) toClean.push({ id: doc.id, data: normalized });
+        return normalized;
+      });
+      purgeLegacyKeys(toClean);
       refreshUI();
       ensureStoresDoc();
     }, error => {
@@ -715,6 +738,22 @@ function setupFirestoreListeners() {
     });
 }
 
+// Remove as chaves legadas (seg..sab2) dos docs que ainda as têm, gravando
+// o documento sem elas (set completo) para não re-migrar nem guardar lixo.
+async function purgeLegacyKeys(list) {
+  if (!list.length) return;
+  try {
+    const batch = db.batch();
+    list.forEach(item => {
+      const { id, ...data } = item.data;
+      batch.set(db.collection('employees').doc(String(id)), data);
+    });
+    await batch.commit();
+  } catch (error) {
+    console.error('Erro ao limpar chaves antigas:', error);
+  }
+}
+
 function stopListeners() {
   if (employeeUnsubscribe) employeeUnsubscribe();
   if (storeUnsubscribe) storeUnsubscribe();
@@ -732,7 +771,7 @@ async function initFirebaseSession() {
 
 function setupAuth() {
   if (!IS_FIREBASE_CONFIGURED) {
-    storesCache = [...DEFAULT_STORES];
+    storesCache = [...getHubBaseStores()];
     document.getElementById('firebaseWarning').classList.remove('hidden');
     document.getElementById('localModeBtn').classList.remove('hidden');
     return;
@@ -1168,10 +1207,12 @@ function renderTable() {
     if (statusFilter === 'FERIAS') matchesStatus = isOnLeave;
     if (statusFilter === 'ATIVOS') matchesStatus = !isOnLeave;
 
-    // Filtro de Localização
+    // Filtro de Localização (nome exato ou variante da mesma unidade)
     let matchesLocation = true;
     if (locationFilter !== 'ALL') {
-      matchesLocation = getAssignments(emp).some(val => normalizeText(val) === normalizeText(locationFilter));
+      matchesLocation = getAssignments(emp).some(val =>
+        normalizeText(val) === normalizeText(locationFilter) ||
+        (typeof window !== 'undefined' && window.Matching && window.Matching.storeNameMatches(val, locationFilter)));
     }
 
     if (matchesSearch && matchesStatus && matchesLocation && matchesPerson) {
@@ -1236,8 +1277,8 @@ function updateKPIs() {
   ).length;
   document.getElementById('statOnLeave').innerText = onLeaveCount;
 
-  // Unidades cadastradas (lista persistida em config/stores)
-  document.getElementById('statTotalStores').innerText = storesCache.length;
+  // Unidades cadastradas (lista persistida em config/stores, sem repetições)
+  document.getElementById('statTotalStores').innerText = getRegisteredStoreList().length;
 }
 
 // Preencher dropdown de unidades
@@ -1245,9 +1286,11 @@ function populateLocationDropdown() {
   const select = document.getElementById('filterLocation');
   select.innerHTML = '<option value="ALL">Todas as Unidades</option>';
 
-  const stores = storesCache.map(store => store.trim().toUpperCase()).sort();
+  const stores = getRegisteredStoreList()
+    .map(store => store.trim().toUpperCase())
+    .sort((a, b) => normalizeText(a).localeCompare(normalizeText(b)));
 
-  Array.from(stores).forEach(store => {
+  stores.forEach(store => {
     const option = document.createElement('option');
     option.value = store;
     option.textContent = store;
@@ -1322,14 +1365,15 @@ function renderStoreCoverage() {
     days.forEach(d => {
       const storeName = d.val ? d.val.trim() : '-';
       if (!isSpecialAssignment(storeName)) {
-        if (!storeMap[storeName]) storeMap[storeName] = [];
-        storeMap[storeName].push({ employee: emp.name, day: d.day });
+        const key = storeName.toUpperCase();
+        if (!storeMap[key]) storeMap[key] = { display: storeName, items: [] };
+        storeMap[key].items.push({ employee: emp.name, day: d.day });
       }
     });
   });
 
   const sortedStores = Object.keys(storeMap)
-    .filter(store => !selectedManager || getManagerStores(selectedManager).some(mStore => Matching.storeNameMatches(store, mStore)))
+    .filter(store => !selectedManager || getManagerStores(selectedManager).some(mStore => Matching.storeNameMatches(storeMap[store].display, mStore)))
     .sort();
 
   if (sortedStores.length === 0) {
@@ -1344,7 +1388,7 @@ function renderStoreCoverage() {
     card.className = 'bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm';
 
     let listHtml = '';
-    storeMap[store].forEach(item => {
+    storeMap[store].items.forEach(item => {
       listHtml += `
         <li class="flex justify-between items-center text-xs border-b border-slate-200/60 py-1.5">
           <span class="font-medium text-slate-700">${escapeHtml(item.employee)}</span>
@@ -1356,10 +1400,10 @@ function renderStoreCoverage() {
     card.innerHTML = `
       <div class="flex justify-between items-center mb-3">
         <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
-          <i class="fa-solid fa-location-dot text-emerald-600"></i> ${escapeHtml(store)}
+          <i class="fa-solid fa-location-dot text-emerald-600"></i> ${escapeHtml(storeMap[store].display)}
         </h3>
         <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-          ${storeMap[store].length} alocações
+          ${storeMap[store].items.length} alocações
         </span>
       </div>
       <ul class="space-y-0.5">
