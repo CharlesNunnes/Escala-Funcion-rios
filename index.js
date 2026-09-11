@@ -96,7 +96,6 @@ const IS_FIREBASE_CONFIGURED = typeof firebase !== 'undefined' &&
   firebaseConfig && firebaseConfig.apiKey && !String(firebaseConfig.apiKey).includes('SUA_API_KEY');
 
 let isLocalMode = false;
-const selectedEmployeeIds = new Set();
 let employeeUnsubscribe = null;
 let storeUnsubscribe = null;
 let managerUnsubscribe = null;
@@ -507,15 +506,6 @@ function buildEmployeeDayFields() {
 function initPrintUI() {
   const now = new Date();
   document.getElementById('printDate').innerText = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-  if (!window.__rowSelectBound) {
-    window.__rowSelectBound = true;
-    document.addEventListener('change', e => {
-      if (e.target && e.target.matches('.row-select')) {
-        if (e.target.checked) selectedEmployeeIds.add(e.target.dataset.id);
-        else selectedEmployeeIds.delete(e.target.dataset.id);
-      }
-    });
-  }
   initTableHeaders();
   buildEmployeeDayFields();
   updatePrintPeriod();
@@ -1187,9 +1177,6 @@ function renderTable() {
       tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-200/60';
 
       tr.innerHTML = `
-        <td class="py-3 px-3 text-center no-print border-r border-slate-200">
-          <input type="checkbox" class="row-select accent-emerald-600 cursor-pointer" data-id="${escapeHtml(String(emp.id))}" ${selectedEmployeeIds.has(String(emp.id)) ? 'checked' : ''} aria-label="Selecionar ${escapeHtml(emp.name)}">
-        </td>
         <td class="py-3 px-4 font-semibold text-slate-800 sticky left-0 bg-white border-r border-slate-200 shadow-sm">
           <div class="flex items-center justify-between">
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
@@ -1200,6 +1187,9 @@ function renderTable() {
           <div class="flex items-center justify-center gap-1">
             <button onclick="editEmployee('${escapeHtml(String(emp.id))}')" title="Editar Escala" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
               <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button onclick="clearEmployee('${escapeHtml(String(emp.id))}')" title="Limpar escala (dias voltam a "-")" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition">
+              <i class="fa-solid fa-eraser"></i>
             </button>
             <button onclick="deleteEmployee('${escapeHtml(String(emp.id))}')" title="Excluir Colaborador" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition">
               <i class="fa-solid fa-trash-can"></i>
@@ -1214,32 +1204,23 @@ function renderTable() {
   document.getElementById('emptyMessage').classList.toggle('hidden', visibleCount > 0);
 }
 
-async function clearSelectedEmployees() {
-  if (!selectedEmployeeIds.size) {
-    alert('Selecione pelo menos um funcionário na tabela.');
-    return;
-  }
-  if (!confirm(`Limpar a escala de ${selectedEmployeeIds.size} funcionário(s)? Todos os dias voltarão a "-".`)) return;
-  const targets = employeesData.filter(emp => selectedEmployeeIds.has(String(emp.id)));
-  targets.forEach(emp => {
-    ASSIGNMENT_KEYS.forEach(key => { emp[key] = '-'; });
-  });
+// Limpa os dados preenchidos do dia para um funcionário (todos os dias voltam a "-").
+async function clearEmployee(id) {
+  const emp = employeesData.find(e => String(e.id) === String(id));
+  if (!emp) return;
+  if (!confirm(`Limpar a escala de "${emp.name}"? Todos os dias voltarão a "-".`)) return;
+  ASSIGNMENT_KEYS.forEach(key => { emp[key] = '-'; });
   if (isUsingFirebase()) {
     try {
-      const batch = db.batch();
-      targets.forEach(emp => {
-        const { id, ...data } = emp;
-        batch.set(db.collection('employees').doc(String(id)), data, { merge: true });
-      });
-      await batch.commit();
+      const { id: empId, ...data } = emp;
+      await db.collection('employees').doc(String(empId)).set(data, { merge: true });
     } catch (error) {
-      alert('Erro ao limpar escalas: ' + error.message);
+      alert('Erro ao limpar escala: ' + error.message);
       return;
     }
   } else {
     localStorage.setItem(DATA_KEY, JSON.stringify(employeesData));
   }
-  selectedEmployeeIds.clear();
   refreshUI();
 }
 
