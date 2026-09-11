@@ -2,20 +2,19 @@
 // Escala de Funcionários - Visualização Pública (somente leitura)
 // ============================================================
 
-// Modelo semanal na visualização pública: mostra o período atual da semana
-// (do dia de hoje até o sábado), que é o escopo que o funcionário/gerente consulta
-// e o intervalo de dias com dados salvos pelo painel restrito.
+// Modelo semanal na visualização pública: mostra a semana corrente completa
+// (Segunda a Sábado). Só exibe o que está gravado para esses dias; se a semana
+// estiver vazia, aparece vazia (sem reaproveitar dados antigos das chaves legadas).
 function getMonthDays() {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (start.getDay() === 0) start.setDate(start.getDate() + 1); // domingo => começa na segunda
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const offsetToMonday = (today.getDay() + 6) % 7; // dias desde o início da semana
+  const monday = new Date(now.getFullYear(), now.getMonth(), today.getDate() - offsetToMonday);
   const days = [];
-  const day = new Date(start);
-  while (day.getDay() !== 6) { // 6 = Sábado
-    days.push({ key: 'd' + day.getDate(), date: new Date(day) });
-    day.setDate(day.getDate() + 1);
+  for (let i = 0; i < 6; i++) {
+    const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+    days.push({ key: 'd' + date.getDate(), date });
   }
-  days.push({ key: 'd' + day.getDate(), date: new Date(day) });
   return days;
 }
 const MONTH_DAYS = getMonthDays();
@@ -36,11 +35,11 @@ function normalizeText(value) {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+// Mostra somente o que está gravado para a semana. Se o documento não tiver os
+// dias preenchidos, exibe vazio ("-") e NUNCA reaproveita dados antigos
+// (chaves legadas seg..sab2 são ignoradas, não migradas para a semana).
 function normalizeEmployee(employee) {
-  const hasDayKeys = MONTH_DAYS.some(d => employee[d.key] != null);
-  // Só converte o formato antigo (seg1..sab2) quando o doc ainda não tem dias;
-  // se já tem chaves dN, o legado é ignorado para não sobrescrever dias limpados/editados.
-  const normalized = hasDayKeys ? { ...employee } : migrateLegacyToDayKeys(employee);
+  const normalized = { ...employee };
   MONTH_DAYS.forEach(d => {
     if (normalized[d.key] == null || normalized[d.key] === '-') {
       normalized[d.key] = '-';
@@ -50,39 +49,6 @@ function normalizeEmployee(employee) {
   LEGACY_WEEK_KEYS.forEach(key => delete normalized[key]);
   LEGACY_ASSIGNMENT_KEYS.forEach(key => delete normalized[key]);
   return normalized;
-}
-
-function migrateLegacyToDayKeys(employee) {
-  const result = { ...employee };
-  LEGACY_WEEK_KEYS.forEach((base, wi) => {
-    const target = getMonthWeekDayKey(0, wi);
-    if (target && result[base] != null && (result[target] == null || result[target] === '-')) {
-      result[target] = result[base];
-    }
-  });
-  LEGACY_ASSIGNMENT_KEYS.forEach(key => {
-    const m = /^(seg|ter|qua|qui|sex|sab)([12])$/.exec(key);
-    if (m) {
-      const wi = LEGACY_WEEK_KEYS.indexOf(m[1]);
-      const target = getMonthWeekDayKey(Number(m[2]) - 1, wi);
-      if (target && result[key] != null && (result[target] == null || result[target] === '-')) {
-        result[target] = result[key];
-      }
-    }
-  });
-  return result;
-}
-
-// Dia do mês correspondente a uma posição (weekIndex 0 ou 1; dowIndex 0=Seg..5=Sáb).
-function getMonthWeekDayKey(weekIndex, dowIndex) {
-  const first = MONTH_DAYS[0].date;
-  const y = first.getFullYear();
-  const m = first.getMonth();
-  let firstMonday = 1;
-  while (new Date(y, m, firstMonday).getDay() !== 1) firstMonday++;
-  const target = new Date(y, m, firstMonday + weekIndex * 7 + dowIndex);
-  if (target.getMonth() !== m) return null;
-  return 'd' + target.getDate();
 }
 
 function escapeHtml(value) {
