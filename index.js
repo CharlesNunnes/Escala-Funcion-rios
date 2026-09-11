@@ -398,6 +398,38 @@ async function deleteStore(storeName) {
   renderStoreList();
 }
 
+// Une lojas que representam a mesma unidade (por matching) e remove as duplicadas.
+async function removeDuplicateStores() {
+  const current = getStoreList();
+  if (!current.length) {
+    alert('Nenhuma loja cadastrada.');
+    return;
+  }
+  const bases = getHubBaseStores();
+  const matchSame = (a, b) => normalizeText(a) === normalizeText(b) ||
+    (typeof window !== 'undefined' && window.Matching && window.Matching.storeNameMatches(a, b));
+  const seen = new Set();
+  const removed = [];
+  const merged = [];
+  current.forEach(store => {
+    const canonical = bases.find(base => matchSame(base, store)) || null;
+    const key = normalizeText(canonical || store);
+    if (seen.has(key)) {
+      removed.push(store);
+      return;
+    }
+    seen.add(key);
+    merged.push(canonical || store);
+  });
+  if (!removed.length) {
+    alert('Nenhuma loja duplicada encontrada.');
+    return;
+  }
+  if (!confirm(`Encontradas ${removed.length} loja(s) duplicada(s).\n\nRemovendo:\n${removed.join(', ')}\n\nContinuar?`)) return;
+  await saveStoreList(merged);
+  renderStoreList();
+}
+
 function formatShortDate(date) {
   return date.toLocaleDateString('pt-BR', {
     day: '2-digit',
