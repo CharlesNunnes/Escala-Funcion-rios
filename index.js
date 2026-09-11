@@ -128,7 +128,10 @@ function getAssignments(employee) {
 }
 
 function normalizeEmployee(employee) {
-  const normalized = migrateLegacyToDayKeys(employee);
+  const hasDayKeys = MONTH_DAYS.some(d => employee[d.key] != null);
+  // Só converte o formato antigo (seg1..sab2) quando o doc ainda não tem dias;
+  // se já tem chaves dN, o legado é ignorado para não sobrescrever dias limpados/editados.
+  const normalized = hasDayKeys ? { ...employee } : migrateLegacyToDayKeys(employee);
   MONTH_DAYS.forEach(d => {
     if (normalized[d.key] == null || normalized[d.key] === '-') {
       normalized[d.key] = '-';
