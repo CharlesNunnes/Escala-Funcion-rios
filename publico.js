@@ -2,18 +2,17 @@
 // Escala de Funcionários - Visualização Pública (somente leitura)
 // ============================================================
 
-// Modelo mensal: um dia por coluna (d{today}..dN) do mês corrente até o fim do mês.
-// Mostra apenas os dias úteis (Seg a Sáb); datas passadas e domingos saem da tela (dados salvos).
+// Modelo semanal na visualização pública: mostra apenas a semana corrente
+// (Segunda a Sábado) — o período que o funcionário/gerente consulta.
 function getMonthDays() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const count = new Date(year, month + 1, 0).getDate();
-  const startDay = now.getDate();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const offsetToMonday = (today.getDay() + 6) % 7; // dias desde o início da semana
+  const monday = new Date(now.getFullYear(), now.getMonth(), today.getDate() - offsetToMonday);
   const days = [];
-  for (let day = startDay; day <= count; day++) {
-    const date = new Date(year, month, day);
-    if (date.getDay() !== 0) days.push({ key: 'd' + day, date });
+  for (let i = 0; i < 6; i++) {
+    const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+    days.push({ key: 'd' + date.getDate(), date });
   }
   return days;
 }
