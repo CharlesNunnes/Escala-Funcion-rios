@@ -1188,7 +1188,7 @@ function renderTable() {
             <button onclick="editEmployee('${escapeHtml(String(emp.id))}')" title="Editar Escala" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
-            <button onclick="clearEmployee('${escapeHtml(String(emp.id))}')" title="Limpar escala (dias voltam a "-")" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition">
+            <button onclick="clearEmployee('${escapeHtml(String(emp.id))}')" title="Limpar escala (dias voltam a -)" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition">
               <i class="fa-solid fa-eraser"></i>
             </button>
             <button onclick="deleteEmployee('${escapeHtml(String(emp.id))}')" title="Excluir Colaborador" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded transition">
