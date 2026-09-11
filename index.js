@@ -63,6 +63,7 @@ function weekdayLabel(date) {
 const LEGACY_WEEK_KEYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
 const LEGACY_ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
 const STORE_KEY = 'escala_operacional_varejo_stores';
+const STORES_MANAGED_KEY = 'escala_operacional_varejo_stores_managed';
 const DATA_KEY = 'escala_operacional_varejo_data';
 const MIGRATION_KEY = 'escala_firebase_migrated';
 const DEFAULT_STORES = [
@@ -208,6 +209,7 @@ function getStoreList() {
 
 async function saveStoreList(stores) {
   storesManuallyManaged = true;
+  localStorage.setItem(STORES_MANAGED_KEY, 'true');
   storesCache = [...stores];
   if (isUsingFirebase()) {
     try {
@@ -232,7 +234,7 @@ function isSpecialAssignment(value) {
 // Implementação compartilhada em matching.js (window.Matching.storeNameMatches)
 
 let storesSyncPending = false;
-let storesManuallyManaged = false;
+let storesManuallyManaged = localStorage.getItem(STORES_MANAGED_KEY) === 'true';
 
 async function ensureStoresDoc() {
   if (!isUsingFirebase() || storesSyncPending) return;
@@ -257,6 +259,7 @@ async function ensureStoresDoc() {
       storesCache = current;
     }
     storesManuallyManaged = true;
+    localStorage.setItem(STORES_MANAGED_KEY, 'true');
   } catch (error) {
     console.error('Erro ao sincronizar lojas:', error);
   } finally {
@@ -287,8 +290,16 @@ function closeStoreModal() {
   document.getElementById('storeModal').classList.add('hidden');
 }
 
+function getRegisteredStoreList() {
+  const map = new Map();
+  storesCache.forEach(store => {
+    if (!map.has(normalizeText(store))) map.set(normalizeText(store), store);
+  });
+  return Array.from(map.values());
+}
+
 function renderStoreList() {
-  const stores = getStoreList();
+  const stores = getRegisteredStoreList();
   const list = document.getElementById('storeList');
   list.innerHTML = '';
   document.getElementById('storesEmptyMsg').classList.toggle('hidden', stores.length > 0);
@@ -400,7 +411,7 @@ async function deleteStore(storeName) {
 
 // Une lojas que representam a mesma unidade (por matching) e remove as duplicadas.
 async function removeDuplicateStores() {
-  const current = getStoreList();
+  const current = getRegisteredStoreList();
   if (!current.length) {
     alert('Nenhuma loja cadastrada.');
     return;
