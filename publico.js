@@ -198,16 +198,50 @@ function getSelectedManager() {
   return null;
 }
 
+// Base local de gerentes (managers-seed.js): garante que o campo Gerente abra
+// mesmo quando a leitura da coleção "managers" estiver bloqueada no Firestore.
+function getSeedManagers() {
+  if (window.MANAGERS_SEED && Array.isArray(window.MANAGERS_SEED.managers)) {
+    return window.MANAGERS_SEED.managers
+      .filter(manager => manager && manager.hub)
+      .map(manager => ({ hub: manager.hub, stores: Array.isArray(manager.stores) ? manager.stores : [] }));
+  }
+  return [];
+}
+
+function mergeManagersWithSeed(list) {
+  const result = [];
+  const add = manager => {
+    if (!manager || !manager.hub) return;
+    const index = result.findIndex(m => normalizeText(m.hub) === normalizeText(manager.hub));
+    const stores = Array.isArray(manager.stores) ? manager.stores : [];
+    if (index === -1) result.push({ hub: manager.hub, stores: [...stores] });
+    else if (!result[index].stores.length && stores.length) result[index].stores = [...stores];
+  };
+  (list || []).forEach(add);
+  getSeedManagers().forEach(add);
+  return result;
+}
+
 function setupManagersListener() {
-  if (managerUnsubscribe || !db) return;
+  // Lista já aparece na hora, com a base local, e depois é atualizada com o Firestore.
+  managersCache = mergeManagersWithSeed(managersCache);
+  populatePublicManagerDropdown();
+  if (managerUnsubscribe || typeof db === 'undefined' || !db) return;
   managerUnsubscribe = db.collection('managers')
     .onSnapshot(snapshot => {
-      managersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      managersCache = mergeManagersWithSeed(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       populatePublicManagerDropdown();
     }, error => {
       console.error('Erro ao escutar gerentes:', error);
+      managersCache = mergeManagersWithSeed(managersCache);
+      populatePublicManagerDropdown();
       const hint = document.getElementById('publicFilterHint');
-      if (hint) hint.textContent = 'Filtro por gerente indisponível: libere a leitura pública de "managers" nas regras do Firestore.';
+      if (hint) {
+        hint.textContent = managersCache.length
+          ? 'Gerentes exibidos a partir da base local do sistema (a leitura de "managers" no Firestore ainda não foi liberada).'
+          : 'Filtro por gerente indisponível: libere a leitura pública de "managers" nas regras do Firestore.';
+      }
     });
 }
 
