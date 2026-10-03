@@ -74,6 +74,13 @@ function getAssignments(emp) {
   return ASSIGNMENT_KEYS.map(key => String(emp[key] || '-')).filter(val => val && val !== '-');
 }
 
+// Status do dia (não é loja): FERIADO, FÉRIAS, FOLGA, ATESTADO e variações.
+function isSpecialValue(value) {
+  const val = String(value || '').trim();
+  if (!val || val === '-') return true;
+  return ['feriado', 'ferias', 'folga', 'atestado'].some(token => normalizeText(val).includes(token));
+}
+
 function getPeriodDates() {
   return MONTH_DAYS.map(d => d.date);
 }
@@ -144,7 +151,7 @@ function renderManagerBanner(manager) {
   }
   stores.innerHTML = '';
   const managerStores = getManagerStores(manager);
-  title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s):';
+  title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s) — exibindo apenas essas lojas na escala:';
   managerStores.forEach(store => {
     const chip = document.createElement('span');
     chip.className = 'inline-flex items-center gap-1 bg-white border border-emerald-300 text-emerald-800 text-xs font-semibold px-2 py-1 rounded-md';
@@ -263,6 +270,16 @@ async function loadPublicSchedule() {
 
     const employeeValue = document.getElementById('filterEmployeeP').value;
     const employeeName = employeeValue && employeeValue.startsWith('emp:') ? employeeValue.slice(4) : null;
+
+    // Com gerente selecionado, mostra apenas as lojas que ele cobre.
+    const managerStores = selectedManager ? getManagerStores(selectedManager) : null;
+    const isVisibleValue = value => {
+      if (!managerStores) return true;
+      const val = String(value || '').trim();
+      if (!val || val === '-' || isSpecialValue(val)) return true;
+      return managerStores.some(store => Matching.storeNameMatches(val, store));
+    };
+
     const filtered = publicEmployees.filter(emp => {
       if (employeeValue && employeeValue.startsWith('emp:')) {
         const matchesById = employeeValue === 'emp:' + String(emp.id);
@@ -270,9 +287,9 @@ async function loadPublicSchedule() {
         if (!matchesById && !matchesByName) return false;
       }
       if (selectedManager) {
-        if (!getAssignments(emp).some(val => getManagerStores(selectedManager).some(store => Matching.storeNameMatches(val, store)))) {
-          return false;
-        }
+        const hasStoreInManager = ASSIGNMENT_KEYS.some(key =>
+          isVisibleValue(emp[key]) && !isSpecialValue(emp[key]));
+        if (!hasStoreInManager) return false;
       }
       return true;
     });
@@ -303,7 +320,7 @@ async function loadPublicSchedule() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200${isToday(periodDates[i]) ? ' is-today' : ''}">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200${isToday(periodDates[i]) ? ' is-today' : ''}">${formatCellBadge(isVisibleValue(emp[key]) ? emp[key] : '-')}</td>`).join('')}
       `;
       tbody.appendChild(tr);
     });

@@ -1167,7 +1167,7 @@ function renderManagerBanner(manager) {
   }
   stores.innerHTML = '';
   const managerStores = getManagerStores(manager);
-  title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s):';
+  title.textContent = manager.hub + ' atende ' + managerStores.length + ' loja(s) — exibindo apenas essas lojas na escala:';
   managerStores.forEach(store => {
     const chip = document.createElement('span');
     chip.className = 'inline-flex items-center gap-1 bg-white border border-emerald-300 text-emerald-800 text-xs font-semibold px-2 py-1 rounded-md';
@@ -1190,14 +1190,25 @@ function renderTable() {
   }
   renderManagerBanner(selectedManager);
 
+  // Com gerente selecionado, a escala mostra somente as lojas que ele cobre.
+  const managerStores = selectedManager ? getManagerStores(selectedManager) : null;
+  const isVisibleValue = value => {
+    if (!managerStores) return true;
+    const val = String(value || '').trim();
+    if (!val || val === '-' || isSpecialAssignment(val)) return true;
+    return managerStores.some(store => Matching.storeNameMatches(val, store));
+  };
+
   tbody.innerHTML = '';
   let visibleCount = 0;
   const periodDates = getPeriodDates();
 
   employeesData.forEach((emp) => {
+    const visibleAssignments = ASSIGNMENT_KEYS.map(key => emp[key]).filter(isVisibleValue);
+
     // Filtro de busca
     const matchesSearch = normalizeText(emp.name).includes(searchVal) ||
-      getAssignments(emp).some(val => normalizeText(val).includes(searchVal));
+      visibleAssignments.some(val => normalizeText(val).includes(searchVal));
 
     // Filtro por pessoa (funcionário ou gerente)
     let matchesPerson = true;
@@ -1207,8 +1218,7 @@ function renderTable() {
         matchesPerson = normalizeText(emp.name) === filterName || personFilter === 'emp:' + String(emp.id);
       } else if (personFilter.startsWith('mgr:')) {
         if (selectedManager) {
-          matchesPerson = getAssignments(emp).some(val =>
-            getManagerStores(selectedManager).some(store => Matching.storeNameMatches(val, store)));
+          matchesPerson = visibleAssignments.some(val => !isSpecialAssignment(val));
         } else {
           matchesPerson = false;
         }
@@ -1240,7 +1250,7 @@ function renderTable() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200${isToday(periodDates[i]) ? ' is-today' : ''}">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200${isToday(periodDates[i]) ? ' is-today' : ''}">${formatCellBadge(isVisibleValue(emp[key]) ? emp[key] : '-')}</td>`).join('')}
         <td class="py-2.5 px-3 text-center border-l border-slate-200 no-print actions-cell">
           <div class="flex items-center justify-center gap-1">
             <button onclick="editEmployee('${escapeHtml(String(emp.id))}')" title="Editar Escala" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
