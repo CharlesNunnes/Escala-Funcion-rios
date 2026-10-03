@@ -2,14 +2,19 @@
 // Escala de Funcionários - Visualização Pública (somente leitura)
 // ============================================================
 
-// Modelo semanal na visualização pública: mostra a semana corrente completa
-// (Segunda a Sábado). Só exibe o que está gravado para esses dias; se a semana
-// estiver vazia, aparece vazia (sem reaproveitar dados antigos das chaves legadas).
+// Modelo semanal na visualização pública: mostra a semana de consulta
+// (Segunda a Sábado). A partir das 12h de sábado (e no domingo) já entra a
+// próxima semana, para o funcionário consultar a escala seguinte com antecedência.
+// Só exibe o que está gravado para esses dias; se a semana estiver vazia, aparece
+// vazia (sem reaproveitar dados antigos das chaves legadas).
 function getMonthDays() {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const offsetToMonday = (today.getDay() + 6) % 7; // dias desde o início da semana
-  const monday = new Date(now.getFullYear(), now.getMonth(), today.getDate() - offsetToMonday);
+  const reference = new Date(today);
+  if (reference.getDay() === 6 && now.getHours() >= 12) reference.setDate(reference.getDate() + 1); // sábado após 12h => próxima semana
+  if (reference.getDay() === 0) reference.setDate(reference.getDate() + 1); // domingo => segunda
+  const offsetToMonday = (reference.getDay() + 6) % 7; // dias desde o início da semana
+  const monday = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() - offsetToMonday);
   const days = [];
   for (let i = 0; i < 6; i++) {
     const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
@@ -307,10 +312,22 @@ function getManagerStores(manager) {
   return result;
 }
 
+// Se a página ficar aberta, a troca de semana (sábado 12h / domingo) passa a
+// valer sozinha assim que chegar o momento.
+function checkWeekRollover() {
+  if (getMonthDays().map(d => d.key).join(',') !== ASSIGNMENT_KEYS.join(',')) {
+    location.reload();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initTableHeaderRow();
   updatePeriodHeader();
   loadPublicSchedule();
   setupManagersListener();
   window.addEventListener('beforeprint', updatePeriodHeader);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkWeekRollover();
+  });
+  setInterval(checkWeekRollover, 60000);
 });
