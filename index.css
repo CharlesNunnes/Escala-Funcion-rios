@@ -128,6 +128,17 @@ main > .print-only {
   line-height: 1.15;
 }
 
+/* Destaque da coluna do dia atual */
+#escalaTable th.is-today,
+#escalaTable td.is-today {
+  background-color: rgba(16, 185, 129, 0.12);
+}
+
+#escalaTable th.is-today {
+  box-shadow: inset 0 -3px 0 #059669;
+  color: #ecfdf5;
+}
+
 #escalaTable th[data-day-index] .day-name,
 #escalaTable th[data-day-index] .day-date {
   display: block;
@@ -299,6 +310,16 @@ body {
   }
   .badge-feriado i, .badge-ferias i, .badge-loja i, .badge-atestado i {
     display: none !important;
+  }
+
+  #escalaTable th.is-today,
+  #escalaTable td.is-today {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  #escalaTable th.is-today {
+    border-bottom: 2px solid #333 !important;
   }
 }
 

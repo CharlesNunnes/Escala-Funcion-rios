@@ -1,0 +1,56 @@
+// ============================================================
+// Regras do Firestore - projeto "escala-funcionario"
+// Publicar em: Firebase Console → Firestore Database → Rules → Publish
+//
+// Leitura pública (view "Ver escala pública"): employees, managers e config/stores.
+// Escrita: apenas administradores cadastrados na coleção "admins".
+// A coleção "admins" só pode ser lida/escrita pelo administrador raiz,
+// evitando recursão entre as regras.
+// ============================================================
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Administrador raiz (cria e remove os demais administradores).
+    function isRoot() {
+      return isSignedIn() && request.auth.token.email == 'xaununnes@gmail.com';
+    }
+
+    // Qualquer conta presente na coleção "admins".
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
+    }
+
+    // Escala, gerentes e lista de lojas: leitura livre, escrita de administrador.
+    match /employees/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /managers/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Lista de administradores: somente o administrador raiz.
+    match /admins/{email} {
+      allow read, write: if isRoot();
+    }
+
+    // Qualquer outra coleção fica bloqueada.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -60,6 +60,14 @@ const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function weekdayLabel(date) {
   return WEEKDAY_LABELS[date.getDay()];
 }
+
+// Destaque da coluna do dia atual (facilita a leitura da escala).
+function isToday(date) {
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+}
 const LEGACY_WEEK_KEYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
 const LEGACY_ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
 const STORE_KEY = 'escala_operacional_varejo_stores';
@@ -127,11 +135,15 @@ function getAssignments(employee) {
   return ASSIGNMENT_KEYS.map(key => String(employee[key] || '-'));
 }
 
-function normalizeEmployee(employee) {
+// allowLegacy: converte o formato antigo (seg..sab2) em dias do mês.
+// Só é usado para dados locais/planilha original. Documentos vindos do Firestore
+// são lidos com allowLegacy = false: assim uma escala antiga nunca reaparece
+// sozinha num mês novo (a semana/mês vazio aparece vazio).
+function normalizeEmployee(employee, allowLegacy = true) {
   const hasDayKeys = MONTH_DAYS.some(d => employee[d.key] != null);
   // Só converte o formato antigo (seg1..sab2) quando o doc ainda não tem dias;
   // se já tem chaves dN, o legado é ignorado para não sobrescrever dias limpados/editados.
-  const normalized = hasDayKeys ? { ...employee } : migrateLegacyToDayKeys(employee);
+  const normalized = (hasDayKeys || !allowLegacy) ? { ...employee } : migrateLegacyToDayKeys(employee);
   MONTH_DAYS.forEach(d => {
     if (normalized[d.key] == null || normalized[d.key] === '-') {
       normalized[d.key] = '-';
@@ -233,7 +245,9 @@ async function saveStoreList(stores) {
 
 function isSpecialAssignment(value) {
   const normalized = normalizeText(value);
-  return !value || value === '-' || ['feriado', 'ferias', 'folga', 'atestado'].includes(normalized);
+  if (!value || value === '-' || !normalized) return true;
+  // Reconhece também variações como "FERIADO NACIONAL" ou "FÉRIAS (DIAS)".
+  return ['feriado', 'ferias', 'folga', 'atestado'].some(token => normalized.includes(token));
 }
 
 // Correspondência de loja entre a escala e a base de gerentes
@@ -322,7 +336,7 @@ function renderStoreList() {
   const list = document.getElementById('storeList');
   list.innerHTML = '';
   document.getElementById('storesEmptyMsg').classList.toggle('hidden', stores.length > 0);
-  stores.sort().forEach(store => {
+  stores.sort((a, b) => normalizeText(a).localeCompare(normalizeText(b))).forEach(store => {
     const li = document.createElement('li');
     li.className = 'flex items-center justify-between py-2.5 gap-3';
     li.dataset.storeName = store;
@@ -478,7 +492,7 @@ function initTableHeaders() {
   MONTH_DAYS.forEach((d, i) => {
     const th = document.createElement('th');
     th.dataset.dayIndex = i;
-    th.className = 'py-2 px-2 text-center text-[10px] sm:text-xs';
+    th.className = 'py-2 px-2 text-center text-[10px] sm:text-xs' + (isToday(d.date) ? ' is-today' : '');
     row.insertBefore(th, actionsTh);
   });
   updatePrintPeriod();
@@ -699,7 +713,7 @@ function setupFirestoreListeners() {
         const raw = doc.data() || {};
         const hasLegacy = LEGACY_WEEK_KEYS.some(k => raw[k] != null) ||
           LEGACY_ASSIGNMENT_KEYS.some(k => raw[k] != null);
-        const normalized = { id: doc.id, ...normalizeEmployee(raw) };
+        const normalized = { id: doc.id, ...normalizeEmployee(raw, false) };
         if (hasLegacy) toClean.push({ id: doc.id, data: normalized });
         return normalized;
       });
@@ -1226,7 +1240,7 @@ function renderTable() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200${isToday(periodDates[i]) ? ' is-today' : ''}">${formatCellBadge(emp[key])}</td>`).join('')}
         <td class="py-2.5 px-3 text-center border-l border-slate-200 no-print actions-cell">
           <div class="flex items-center justify-center gap-1">
             <button onclick="editEmployee('${escapeHtml(String(emp.id))}')" title="Editar Escala" class="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded transition">
@@ -1284,6 +1298,7 @@ function updateKPIs() {
 // Preencher dropdown de unidades
 function populateLocationDropdown() {
   const select = document.getElementById('filterLocation');
+  const previous = select.value;
   select.innerHTML = '<option value="ALL">Todas as Unidades</option>';
 
   const stores = getRegisteredStoreList()
@@ -1296,6 +1311,9 @@ function populateLocationDropdown() {
     option.textContent = store;
     select.appendChild(option);
   });
+
+  // Preserva a loja selecionada quando a lista é reconstruída (ex.: após uma edição).
+  if (previous) select.value = previous;
 }
 
 // Preencher dropdown de pessoas (funcionários + gerentes)

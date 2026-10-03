@@ -23,6 +23,14 @@ const WEEKDAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function weekdayLabel(date) {
   return WEEKDAY_LABELS[date.getDay()];
 }
+
+// Destaque da coluna do dia atual (facilita a leitura da escala).
+function isToday(date) {
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+}
 const LEGACY_WEEK_KEYS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
 const LEGACY_ASSIGNMENT_KEYS = ['seg1', 'ter1', 'qua1', 'qui1', 'sex1', 'sab1', 'seg2', 'ter2', 'qua2', 'qui2', 'sex2', 'sab2'];
 
@@ -256,7 +264,7 @@ async function loadPublicSchedule() {
             <span class="employee-name" title="${escapeHtml(emp.name)}">${escapeHtml(emp.name)}</span>
           </div>
         </td>
-        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200">${formatCellBadge(emp[key])}</td>`).join('')}
+        ${ASSIGNMENT_KEYS.map((key, i) => `<td data-day-index="${i}" data-label="${weekdayLabel(periodDates[i])} ${formatShortDate(periodDates[i])}" class="py-2.5 px-3 text-center border-l border-slate-200${isToday(periodDates[i]) ? ' is-today' : ''}">${formatCellBadge(emp[key])}</td>`).join('')}
       `;
       tbody.appendChild(tr);
     });
@@ -278,7 +286,7 @@ function initTableHeaderRow() {
   MONTH_DAYS.forEach((d, i) => {
     const th = document.createElement('th');
     th.dataset.dayIndex = i;
-    th.className = 'py-2 px-2 text-center text-[10px] sm:text-xs';
+    th.className = 'py-2 px-2 text-center text-[10px] sm:text-xs' + (isToday(d.date) ? ' is-today' : '');
     row.appendChild(th);
   });
   updatePeriodHeader();
